@@ -207,7 +207,7 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
         playerView.setControllerAnimationEnabled(false)
 
         playerLockScreenHelper = PlayerLockScreenHelper(this, playerBinding, orientationListener)
-        playerGestureHelper = PlayerGestureHelper(this, playerBinding, playerLockScreenHelper)
+        playerGestureHelper = PlayerGestureHelper(this, playerBinding, playerLockScreenHelper,viewModel.player.value)
 
         // Handle fullscreen switcher
         fullscreenSwitcher.setOnClickListener {

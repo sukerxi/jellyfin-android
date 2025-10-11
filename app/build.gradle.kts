@@ -32,7 +32,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 26
         targetSdk = 36
         versionName = project.getVersionName()
         versionCode = getVersionCode(versionName!!)
@@ -57,11 +57,19 @@ android {
 
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = releaseSigningConfig
+
+            ndk {
+                abiFilters += listOf("arm64-v8a") //
+            }
         }
         getByName("debug") {
             applicationIdSuffix = ".debug"
             isDebuggable = true
             aaptOptions.cruncherEnabled = false
+
+            ndk {
+                abiFilters += listOf("x86_64", "arm64-v8a")
+            }
         }
     }
 
@@ -152,6 +160,9 @@ dependencies {
     implementation(libs.bundles.androidx.media3)
     proprietaryImplementation(libs.androidx.media3.cast)
     proprietaryImplementation(libs.bundles.playservices)
+
+    //#libmpv-android
+    implementation(libs.libmpv.android)
 
     // Room
     implementation(libs.bundles.androidx.room)

@@ -45,6 +45,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     private lateinit var backgroundAudioPreference: Preference
     private lateinit var directPlayAssPreference: Preference
     private lateinit var externalPlayerChoicePreference: Preference
+    private lateinit var mpvUseEmbedFontPreference: Preference
 
     init {
         Preference.Config.titleMaxLines = 2
@@ -89,6 +90,11 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
         val videoPlayerOptions = listOf(
             SelectionItem(VideoPlayerType.WEB_PLAYER, R.string.video_player_web, R.string.video_player_web_description),
             SelectionItem(
+                VideoPlayerType.MPV_PLAYER,
+                R.string.video_player_mpv,
+                R.string.video_player_mpv_description,
+            ),
+            SelectionItem(
                 VideoPlayerType.EXO_PLAYER,
                 R.string.video_player_integrated,
                 R.string.video_player_native_description,
@@ -110,6 +116,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
                 backgroundAudioPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 directPlayAssPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 externalPlayerChoicePreference.enabled = selection == VideoPlayerType.EXTERNAL_PLAYER
+                mpvUseEmbedFontPreference.enabled= selection ==VideoPlayerType.MPV_PLAYER
             }
         }
         startLandscapeVideoInLandscapePreference = checkBox(Constants.PREF_EXOPLAYER_START_LANDSCAPE_VIDEO_IN_LANDSCAPE) {
@@ -146,6 +153,12 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
             titleRes = R.string.pref_exoplayer_direct_play_ass
             summaryRes = R.string.pref_exoplayer_direct_play_ass_summary
             enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
+        }
+
+        mpvUseEmbedFontPreference = checkBox(Constants.PREF_MPV_USE_EMBED_FONT) {
+            titleRes = R.string.pref_mpv_use_embed_font
+            summaryRes = R.string.pref_mpv_use_embed_font_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.MPV_PLAYER
         }
 
         // Generate available external player options

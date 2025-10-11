@@ -2,6 +2,7 @@ package org.jellyfin.mobile.player.deviceprofile
 
 import android.media.MediaCodecList
 import org.jellyfin.mobile.app.AppPreferences
+import org.jellyfin.mobile.settings.VideoPlayerType
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.sdk.model.api.CodecProfile
 import org.jellyfin.sdk.model.api.ContainerProfile
@@ -130,6 +131,9 @@ class DeviceProfileBuilder(
         }
 
         val subtitleProfiles = when {
+            appPreferences.videoPlayerType== VideoPlayerType.MPV_PLAYER->{
+                getSubtitleProfiles(EXO_EMBEDDED_SUBTITLES + SUBTITLES_SSA, EXO_EXTERNAL_SUBTITLES + SUBTITLES_SSA)
+            }
             appPreferences.exoPlayerDirectPlayAss -> {
                 getSubtitleProfiles(EXO_EMBEDDED_SUBTITLES + SUBTITLES_SSA, EXO_EXTERNAL_SUBTITLES + SUBTITLES_SSA)
             }
