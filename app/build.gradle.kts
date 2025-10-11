@@ -153,6 +153,9 @@ dependencies {
     proprietaryImplementation(libs.androidx.media3.cast)
     proprietaryImplementation(libs.bundles.playservices)
 
+    //#libmpv-android
+    implementation(libs.libmpv.android)
+
     // Room
     implementation(libs.bundles.androidx.room)
     implementation(libs.androidx.room.ktx)
