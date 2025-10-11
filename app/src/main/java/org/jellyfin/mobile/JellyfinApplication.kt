@@ -1,6 +1,7 @@
 package org.jellyfin.mobile
 
 import android.app.Application
+import android.os.StrictMode
 import android.webkit.WebView
 import org.jellyfin.mobile.app.apiModule
 import org.jellyfin.mobile.app.applicationModule
@@ -16,6 +17,8 @@ import timber.log.Timber
 class JellyfinApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        val policy: StrictMode.ThreadPolicy  =  StrictMode.ThreadPolicy.Builder().permitAll().build()
+        StrictMode.setThreadPolicy(policy)
 
         // Setup logging
         Timber.plant(JellyTree())

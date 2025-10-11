@@ -89,6 +89,11 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
         val videoPlayerOptions = listOf(
             SelectionItem(VideoPlayerType.WEB_PLAYER, R.string.video_player_web, R.string.video_player_web_description),
             SelectionItem(
+                VideoPlayerType.MPV_PLAYER,
+                R.string.video_player_mpv,
+                R.string.video_player_mpv_description,
+            ),
+            SelectionItem(
                 VideoPlayerType.EXO_PLAYER,
                 R.string.video_player_integrated,
                 R.string.video_player_native_description,

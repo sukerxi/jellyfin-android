@@ -32,7 +32,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 26
         targetSdk = 36
         versionName = project.getVersionName()
         versionCode = getVersionCode(versionName!!)
@@ -152,6 +152,9 @@ dependencies {
     implementation(libs.bundles.androidx.media3)
     proprietaryImplementation(libs.androidx.media3.cast)
     proprietaryImplementation(libs.bundles.playservices)
+
+    //#libmpv-android
+    implementation(libs.libmpv.android)
 
     // Room
     implementation(libs.bundles.androidx.room)
