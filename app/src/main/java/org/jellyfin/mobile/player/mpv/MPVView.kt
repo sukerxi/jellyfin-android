@@ -97,11 +97,11 @@ internal class MPVView(context: Context, attrs: AttributeSet? = null) : BaseMPVV
 
         MPVLib.setOptionString("gpu-context", "android")
         MPVLib.setOptionString("opengl-es", "yes")
-        MPVLib.setOptionString("hwdec", hwdec)
+        MPVLib.setOptionString("hwdec", "no")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("ao", "audiotrack,opensles")
-        MPVLib.setOptionString("tls-verify", "yes")
-        MPVLib.setOptionString("tls-ca-file", "${this.context.filesDir.path}/cacert.pem")
+//        MPVLib.setOptionString("tls-verify", "yes")
+//        MPVLib.setOptionString("tls-ca-file", "${this.context.filesDir.path}/cacert.pem")
         MPVLib.setOptionString("input-default-bindings", "yes")
         // Limit demuxer cache since the defaults are too high for mobile devices
         val cacheMegs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 64 else 32
@@ -113,6 +113,8 @@ internal class MPVView(context: Context, attrs: AttributeSet? = null) : BaseMPVV
         MPVLib.setOptionString("screenshot-directory", screenshotDir.path)
         // workaround for <https://github.com/mpv-player/mpv/issues/14651>
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
+        // Disable youtube-dl/yt-dlp integration (not needed for Jellyfin streams)
+        MPVLib.setOptionString("ytdl", "no")
     }
 
     override fun postInitOptions() {

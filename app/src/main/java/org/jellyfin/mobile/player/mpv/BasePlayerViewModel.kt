@@ -10,7 +10,7 @@ interface BasePlayerViewModel {
 //    fun getStateAndPause(): PlayState?
 //    suspend fun stopTranscoding(mediaSource: RemoteJellyfinMediaSource)
 
-    fun load(jellyfinMediaSource: JellyfinMediaSource,exoMediaSource: MediaSource, playWhenReady: Boolean)
+    fun load(jellyfinMediaSource: JellyfinMediaSource, playWhenReady: Boolean)
 
     fun setupPlayer()
 

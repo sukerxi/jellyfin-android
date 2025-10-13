@@ -87,13 +87,13 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet?) : SurfaceView
         // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily not
         MPVLib.setOptionString("force-window", "yes")
 
-        if (filePath != null) {
-            MPVLib.command(arrayOf("loadfile", filePath as String))
-            filePath = null
-        } else {
-            // We disable video output when the context disappears, enable it back
-            MPVLib.setPropertyString("vo", voInUse)
-        }
+//        if (filePath != null) {
+//            MPVLib.command(arrayOf("loadfile", filePath as String))
+//            filePath = null
+//        } else {
+//            // We disable video output when the context disappears, enable it back
+//            MPVLib.setPropertyString("vo", voInUse)
+//        }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {

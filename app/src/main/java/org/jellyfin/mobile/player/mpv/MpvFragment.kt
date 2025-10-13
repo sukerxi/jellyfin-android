@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
+import dev.jdtech.mpv.MPVLib
 import kotlinx.coroutines.launch
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.player.PlayerException
@@ -52,9 +53,10 @@ class MpvFragment : Fragment() , KoinComponent{
     private val deviceProfile = deviceProfileBuilder.getDeviceProfile()
 
     private val mediaSourceResolver: MediaSourceResolver by inject()
-    private var mpvView: MPVView? = null
+    private lateinit var mpvView: MPVView
     private val viewModel: MpvViewModel by viewModels()
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+
         val mpvView = MPVView(
             requireContext()
         ).apply {
@@ -64,7 +66,7 @@ class MpvFragment : Fragment() , KoinComponent{
         mpvView.initialize()
 
 
-        return mpvView;
+        return mpvView
     }
     private suspend fun startRemotePlayback(
         itemId: UUID,
@@ -90,9 +92,11 @@ class MpvFragment : Fragment() , KoinComponent{
 //            }
 //
 //            _currentMediaSource.value = jellyfinMediaSource
-
+            val url = createVideoMediaSource(jellyfinMediaSource)
+//            mpvView.playFile( url)
+            MPVLib.command(arrayOf("loadfile", url as String))
             // Load new media source
-            viewModel.load(jellyfinMediaSource, prepareStreams(jellyfinMediaSource), playWhenReady)
+            viewModel.load(jellyfinMediaSource, playWhenReady)
         }.onFailure { error ->
             // Should always be of this type, other errors are silently dropped
             return error as? PlayerException
@@ -113,18 +117,18 @@ class MpvFragment : Fragment() , KoinComponent{
 //        }
 //    }
 
-    private fun prepareStreams(source: RemoteJellyfinMediaSource): MediaSource {
-        val videoSource = createVideoMediaSource(source)
-        val subtitleSources = createExternalSubtitleMediaSources(source)
-        return when {
-            subtitleSources.isNotEmpty() -> MergingMediaSource(videoSource, *subtitleSources)
-            else -> videoSource
-        }
-    }
+//    private fun prepareStreams(source: RemoteJellyfinMediaSource): MediaSource {
+//        val videoSource = createVideoMediaSource(source)
+//        val subtitleSources = createExternalSubtitleMediaSources(source)
+//        return when {
+//            subtitleSources.isNotEmpty() -> MergingMediaSource(videoSource, *subtitleSources)
+//            else -> videoSource
+//        }
+//    }
 
 
     @CheckResult
-    private fun createVideoMediaSource(source: JellyfinMediaSource): MediaSource {
+    private fun createVideoMediaSource(source: JellyfinMediaSource): String {
         val sourceInfo = source.sourceInfo
         val (url, factory) = when (source.playMethod) {
             PlayMethod.DIRECT_PLAY -> {
@@ -172,12 +176,12 @@ class MpvFragment : Fragment() , KoinComponent{
             }
         }
 
-        val mediaItem = MediaItem.Builder()
-            .setMediaId(source.itemId.toString())
-            .setUri(url)
-            .build()
+//        val mediaItem = MediaItem.Builder()
+//            .setMediaId(source.itemId.toString())
+//            .setUri(url)
+//            .build()
 
-        return factory.createMediaSource(mediaItem)
+        return url
     }
 
     /**
@@ -222,7 +226,8 @@ class MpvFragment : Fragment() , KoinComponent{
                 return@launch
             }
             startRemotePlayback(
-                itemId = playOptions.mediaSourceId?.toUUID() ?: playOptions.ids.first(),
+//                itemId = playOptions.mediaSourceId?.toUUID() ?: playOptions.ids.first(),
+                itemId = playOptions.ids.first() ,
                 mediaSourceId = playOptions.mediaSourceId,
                 maxStreamingBitrate = null,
                 startTime = playOptions.startPosition,
@@ -236,8 +241,8 @@ class MpvFragment : Fragment() , KoinComponent{
     }
 
     override fun onDestroyView() {
-        mpvView?.destroy()
-        mpvView = null
+        mpvView.destroy()
+//        mpvView = null
         super.onDestroyView()
     }
 }
