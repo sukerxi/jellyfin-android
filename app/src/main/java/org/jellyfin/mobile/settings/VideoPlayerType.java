@@ -7,11 +7,11 @@ import androidx.annotation.StringDef;
     VideoPlayerType.WEB_PLAYER,
     VideoPlayerType.EXO_PLAYER,
     VideoPlayerType.EXTERNAL_PLAYER,
-    VideoPlayerType.MPV
+    VideoPlayerType.MPV_PLAYER
 })
 public @interface VideoPlayerType {
     String WEB_PLAYER = "webui";
     String EXO_PLAYER = "exoplayer";
     String EXTERNAL_PLAYER = "external";
-    String MPV = "mpv";
+    String MPV_PLAYER = "mpv";
 }

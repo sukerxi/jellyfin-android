@@ -280,7 +280,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
     fun load(jellyfinMediaSource: JellyfinMediaSource, exoMediaSource: MediaSource, playWhenReady: Boolean) {
         val player = playerOrNull ?: return
-
         player.setMediaSource(exoMediaSource)
         player.prepare()
 
