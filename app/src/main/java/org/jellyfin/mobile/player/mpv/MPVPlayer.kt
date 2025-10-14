@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import dev.jdtech.mpv.MPVLib
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * @author dr
@@ -67,28 +68,46 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 
     override fun getState(): State {
         val builder = State.Builder()
+
+        // 1. 获取 mpv 状态
+        val paused = MPVLib.getPropertyDouble("pause")
+        val duration = MPVLib.getPropertyDouble("duration")
+        val position = MPVLib.getPropertyDouble("time-pos")
+        val buffering = MPVLib.getPropertyBoolean("cache-buffering")
+
+        // 2. 确定播放状态
+        var playerState: Int
+        if (duration == null) {
+            playerState = STATE_IDLE;
+        } else if (buffering) {
+            playerState = STATE_BUFFERING;
+        } else if (position != null && position >= duration) {
+            playerState = STATE_ENDED;
+        } else {
+            playerState = STATE_READY;
+        }
         builder
-            .setPlayWhenReady(playWhenReady, currentPlayWhenReadyChangeReason)
-            .setPlaybackState(playbackState)
-            .setPlaybackSuppressionReason(playbackSuppressionReason)
-            .setPlayerError(playerError)
-            .setRepeatMode(repeatMode)
-            .setShuffleModeEnabled(shuffleModeEnabled)
-            .setIsLoading(isLoading)
-            .setSeekBackIncrementMs(seekBackIncrement)
-            .setSeekForwardIncrementMs(seekForwardIncrement)
-            .setMaxSeekToPreviousPositionMs(maxSeekToPreviousPosition)
-            .setPlaybackParameters(playbackParameters)
-            .setTrackSelectionParameters(trackSelectionParameters)
-            .setAudioAttributes(audioAttributes)
-            .setVolume(volume)
-            .setVideoSize(videoSize)
-            .setCurrentCues(currentCues)
-            .setDeviceInfo(deviceInfo)
-            .setDeviceVolume(deviceVolume)
-            .setIsDeviceMuted(isDeviceMuted)
-            .setSurfaceSize(surfaceSize)
-            .setContentPositionMs(currentPosition)
+            .setPlaybackState(playerState)
+//            .setPlaybackSuppressionReason(playbackSuppressionReason)
+//            .setPlayerError(playerError)
+//            .setRepeatMode(repeatMode)
+//            .setShuffleModeEnabled(shuffleModeEnabled)
+//            .setIsLoading(isLoading)
+//            .setSeekBackIncrementMs(seekBackIncrement)
+//            .setSeekForwardIncrementMs(seekForwardIncrement)
+//            .setMaxSeekToPreviousPositionMs(maxSeekToPreviousPosition)
+//            .setPlaybackParameters(playbackParameters)
+//            .setTrackSelectionParameters(trackSelectionParameters)
+//            .setAudioAttributes(audioAttributes)
+//            .setVolume(volume)
+//            .setVideoSize(videoSize)
+//            .setCurrentCues(currentCues)
+//            .setDeviceInfo(deviceInfo)
+//            .setDeviceVolume(deviceVolume)
+//            .setIsDeviceMuted(isDeviceMuted)
+//            .setSurfaceSize(surfaceSize)
+//            .setContentPositionMs(currentPosition)
+
 
 //        builder
 //            .setNewlyRenderedFirstFrame
@@ -174,15 +193,63 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
     }
 
     override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
-        return super.handleSetPlaybackParameters(playbackParameters)
+        //todo
+        return Futures.immediateFuture(null)
     }
 
     override fun handleSetPlaylistMetadata(playlistMetadata: MediaMetadata): ListenableFuture<*> {
         return super.handleSetPlaylistMetadata(playlistMetadata)
     }
-
+    private val pendingPauseFuture = AtomicReference<SettableFuture<Void>?>(null)
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-        return super.handleSetPlayWhenReady(playWhenReady)
+        val targetPause = !playWhenReady
+
+
+
+        // 可选：取消之前的未完成操作（防堆积）
+        pendingPauseFuture.getAndSet(null)?.set(null) // 或 setException
+
+        val future = SettableFuture.create<Void>()
+        pendingPauseFuture.set(future)
+        val observer = object : MPVLib.EventObserver {
+            override fun eventProperty(property: String) {
+                TODO("Not yet implemented")
+            }
+
+            override fun eventProperty(property: String, value: Long) {
+                TODO("Not yet implemented")
+            }
+
+            override fun eventProperty(property: String, value: Double) {
+                TODO("Not yet implemented")
+            }
+
+            override fun eventProperty(property: String, value: Boolean) {
+                if (property.equals("pause")) {
+                    if (value == targetPause) {
+                        // 确认值已生效
+                        MPVLib.removeObserver(this)
+                        pendingPauseFuture.set(null)
+                        future.set(null)
+                    }
+                }
+            }
+
+            override fun eventProperty(property: String, value: String) {
+                TODO("Not yet implemented")
+            }
+
+            override fun event(eventId: Int) {
+                TODO("Not yet implemented")
+            }
+        }
+        MPVLib.addObserver(observer)
+
+        // 执行设置（异步生效）
+        MPVLib.setPropertyBoolean("pause", targetPause)
+        return future
+
+
     }
 
     override fun handleSetRepeatMode(repeatMode: Int): ListenableFuture<*> {
