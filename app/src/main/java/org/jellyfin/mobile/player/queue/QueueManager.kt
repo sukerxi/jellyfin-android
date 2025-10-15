@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.MediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
@@ -258,8 +259,30 @@ class QueueManager(
      */
     @CheckResult
     private fun createVideoMediaSource(source: JellyfinMediaSource): MediaSource {
+        val (url, factory) = generateMediaSource( source)
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(source.itemId.toString())
+            .setUri(url)
+            .build()
+
+        return factory.createMediaSource(mediaItem)
+    }
+    @CheckResult
+    public fun createVideoMediaItem(source: JellyfinMediaSource): MediaItem {
+        val (url, factory) = generateMediaSource( source)
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(source.itemId.toString())
+            .setUri(url)
+            .build()
+
+        return mediaItem
+    }
+
+
+    @CheckResult
+    private fun generateMediaSource(source: JellyfinMediaSource): Pair<String, MediaSourceFactory> {
         val sourceInfo = source.sourceInfo
-        val (url, factory) = when (source.playMethod) {
+        return when (source.playMethod) {
             PlayMethod.DIRECT_PLAY -> {
                 when (sourceInfo.protocol) {
                     MediaProtocol.FILE -> {
@@ -305,13 +328,9 @@ class QueueManager(
             }
         }
 
-        val mediaItem = MediaItem.Builder()
-            .setMediaId(source.itemId.toString())
-            .setUri(url)
-            .build()
 
-        return factory.createMediaSource(mediaItem)
     }
+
 
     /**
      * Creates [MediaSource]s for all external subtitle streams in the [JellyfinMediaSource].
