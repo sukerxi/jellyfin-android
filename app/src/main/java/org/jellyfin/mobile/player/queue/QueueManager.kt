@@ -259,7 +259,7 @@ class QueueManager(
      */
     @CheckResult
     private fun createVideoMediaSource(source: JellyfinMediaSource): MediaSource {
-        val (url, factory) = generateMediaSource( source)
+        val (url, factory) = generateMediaSourceBaseInfo( source)
         val mediaItem = MediaItem.Builder()
             .setMediaId(source.itemId.toString())
             .setUri(url)
@@ -269,7 +269,7 @@ class QueueManager(
     }
     @CheckResult
     public fun createVideoMediaItem(source: JellyfinMediaSource): MediaItem {
-        val (url, factory) = generateMediaSource( source)
+        val (url, factory) = generateMediaSourceBaseInfo( source)
         val mediaItem = MediaItem.Builder()
             .setMediaId(source.itemId.toString())
             .setUri(url)
@@ -280,7 +280,7 @@ class QueueManager(
 
 
     @CheckResult
-    private fun generateMediaSource(source: JellyfinMediaSource): Pair<String, MediaSourceFactory> {
+    public fun generateMediaSourceBaseInfo(source: JellyfinMediaSource): Pair<String, MediaSourceFactory> {
         val sourceInfo = source.sourceInfo
         return when (source.playMethod) {
             PlayMethod.DIRECT_PLAY -> {
