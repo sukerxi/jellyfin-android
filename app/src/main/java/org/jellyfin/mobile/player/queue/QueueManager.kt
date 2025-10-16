@@ -6,6 +6,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MediaSourceFactory
@@ -270,7 +271,11 @@ class QueueManager(
     @CheckResult
     public fun createVideoMediaItem(source: JellyfinMediaSource): MediaItem {
         val (url, factory) = generateMediaSourceBaseInfo( source)
+        val analyzeDurationMs = source.sourceInfo.analyzeDurationMs
+        val metadata = MediaMetadata.Builder().setDurationMs(analyzeDurationMs?.toLong())
+            .build()
         val mediaItem = MediaItem.Builder()
+            .setMediaMetadata(metadata)
             .setMediaId(source.itemId.toString())
             .setUri(url)
             .build()

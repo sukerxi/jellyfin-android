@@ -23,6 +23,7 @@ import dev.jdtech.mpv.MPVLib.MPV_FORMAT_INT64
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_STRING
 import java.sql.Time
+import java.util.UUID
 import kotlin.concurrent.thread
 
 /**
@@ -37,37 +38,6 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
         postInitOptions()
         observeProperties()
 
-
-        val observer = object : MPVLib.EventObserver {
-            override fun eventProperty(property: String) {
-                TODO("Not yet implemented")
-            }
-
-            override fun eventProperty(property: String, value: Long) {
-                if (property=="time-pos/full"){
-
-                }else if(property=="duration/full"){
-                    invalidateState()
-                }
-            }
-
-            override fun eventProperty(property: String, value: Double) {
-                TODO("Not yet implemented")
-            }
-
-            override fun eventProperty(property: String, value: Boolean) {
-                TODO("Not yet implemented")
-            }
-
-            override fun eventProperty(property: String, value: String) {
-                TODO("Not yet implemented")
-            }
-
-            override fun event(eventId: Int) {
-                TODO("Not yet implemented")
-            }
-        }
-        MPVLib.addObserver(observer)
     }
 
 
@@ -104,67 +74,34 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
     }
 
     override fun getState(): State {
+
         val builder = State.Builder()
-        // 构建 Timeline
-//        val timeline = if (currentMediaItem!=null ) {
-//            val duration = C.msToUs(MPVLib.getPropertyInt("duration/full").toLong())
-//
-//            val window = Timeline.Window()
-//            window.set(currentMediaItem?.mediaId as Any,currentMediaItem
-//                ,null,0,0,0,true,true,
-//                null,0,
-//                duration,
-//                0,0,0
-//            )
-//            val period = Timeline.Period()
-//            period.set(currentMediaItem?.mediaId,currentMediaItem?.mediaId,0,duration,0)
-//            object : Timeline() {
-//                override fun getWindowCount(): Int {
-//                    return 1
-//                }
-//
-//                override fun getWindow(windowIndex: Int, window: Window, defaultPositionProjectionUs: Long): Window {
-//                    return window;
-//                }
-//
-//                override fun getPeriodCount(): Int {
-//                    return 1
-//                }
-//
-//                override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period {
-//                    return period
-//                }
-//
-//                override fun getIndexOfPeriod(uid: Any): Int {
-//                    return 0
-//                }
-//
-//                override fun getUidOfPeriod(periodIndex: Int): Any {
-//                    return currentMediaItem?.mediaId!!
-//                }
-//            }
-//
-//
-//        } else {
-//            Timeline.EMPTY
-//        }
-
-
         // 1. 获取 mpv 状态
-//        val paused = MPVLib.getPropertyBoolean("pause")
-//        val duration = MPVLib.getPropertyDouble("duration")
-//        val position = MPVLib.getPropertyDouble("time-pos/full")
-//        val buffering = MPVLib.getPropertyBoolean("paused-for-cache")
+        var duration = MPVLib.getPropertyInt("duration/full")
+        if (duration == null) {
+            duration =0
+        }
+        var position = MPVLib.getPropertyInt("time-pos/full")
+        if (position == null) {
+            position =0
+        }
 
-        // 2. 确定播放状态
-//        var playerState: Int
-//        playerState = if (buffering) {
-//            STATE_BUFFERING
-//        } else if (position != null && position >= duration) {
-//            STATE_ENDED
-//        } else {
-//            STATE_READY
-//        }
+        var pause = MPVLib.getPropertyBoolean("pause")
+
+
+
+
+        val durationUs = Util.msToUs(duration*1000.toLong())
+        val positionUs = Util.msToUs(position*1000.toLong())
+//        val mediaItem = getMediaItemAt(0)
+        val mediaItemData = MediaItemData.Builder(UUID.randomUUID())
+//            .setMediaItem(mediaItem)
+            .setDefaultPositionUs(positionUs)
+            .setDurationUs(durationUs)
+            .setIsSeekable(true)
+            .build()
+        val listMediaItemData = arrayListOf(mediaItemData)
+
 
         val permanentAvailableCommands =
             Player.Commands.Builder()
@@ -202,12 +139,16 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 
 
         builder
-//            .setPlaybackState(playerState)
+            .setPlaylist(listMediaItemData)
             .setAvailableCommands(permanentAvailableCommands)
             .setAdPositionMs(20)
-        return builder.build().apply {
-            this.timeline=timeline
+
+        if (pause!=null){
+            builder
+                .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+//                .setPlaybackState(if (pause) STATE_READY else STATE_IDLE  )
         }
+        return builder.build()
     }
 
     override fun handleSetMediaItems(
@@ -228,13 +169,13 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         MPVLib.setPropertyBoolean("pause", !playWhenReady)
-//        Thread.sleep(200) //
         return Futures.immediateFuture(null)
 //        return createMPVFuture("pause", !playWhenReady)
 
     }
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
         MPVLib.setPropertyInt("time-pos/full", positionMs.toInt())
+
         return Futures.immediateFuture(null)
 //        return createMPVFuture("time-pos/full", positionMs)
     }
@@ -260,7 +201,6 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
     }
 
     override fun handleRelease(): ListenableFuture<*> {
-        MPVLib.destroy()
         return Futures.immediateFuture(null)
     }
 
