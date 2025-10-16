@@ -2,16 +2,15 @@ package org.jellyfin.mobile.player.mpv
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
 import android.os.Looper
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
-import androidx.media3.common.Timeline
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.Util
 import com.google.common.util.concurrent.Futures
@@ -22,29 +21,62 @@ import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_INT64
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_STRING
-import java.sql.Time
 import java.util.UUID
-import kotlin.concurrent.thread
 
 /**
  * @author dr
  */
 class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(applicationLooper) {
-
+    private var mpvEvent: Int = MPVLib.MPV_EVENT_NONE
     init {
+        val mainHandler = Handler(Looper.getMainLooper())
         MPVLib.create(context)
         preInitOptions()
         MPVLib.init()
         postInitOptions()
         observeProperties()
 
+        val observer = object : MPVLib.EventObserver {
+            override fun eventProperty(property: String) {
+//                TODO("Not yet implemented")
+            }
+
+            override fun eventProperty(property: String, value: Long) {
+
+
+            }
+
+            override fun eventProperty(property: String, value: Double) {
+//                TODO("Not yet implemented")
+            }
+
+            override fun eventProperty(property: String, value: Boolean) {
+                if(property=="paused-for-cache"){
+                    mainHandler.post {
+                        invalidateState()
+                    }
+                }
+            }
+
+            override fun eventProperty(property: String, value: String) {
+//                TODO("Not yet implemented")
+            }
+
+            override fun event(eventId: Int) {
+                mainHandler.post {
+                    this@MPVPlayer.mpvEvent=eventId
+                    invalidateState()
+                }
+            }
+        }
+        MPVLib.addObserver(observer)
     }
 
 
     fun preInitOptions(){
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
-        MPVLib.setOptionString("hwdec", "no")
+        MPVLib.setOptionString("hwdec", "yes")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("gpu-context", "auto")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
@@ -55,11 +87,7 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
         val cacheMegs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) 64 else 32
         MPVLib.setOptionString("demuxer-max-bytes", "${cacheMegs * 1024 * 1024}")
         MPVLib.setOptionString("demuxer-max-back-bytes", "${cacheMegs * 1024 * 1024}")
-        //
-//        val screenshotDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-//        screenshotDir.mkdirs()
-//        MPVLib.setOptionString("screenshot-directory", screenshotDir.path)
-        // workaround for <https://github.com/mpv-player/mpv/issues/14651>
+
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
         // Disable youtube-dl/yt-dlp integration (not needed for Jellyfin streams)
         MPVLib.setOptionString("ytdl", "no")
@@ -74,9 +102,21 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
     }
 
     override fun getState(): State {
+        var pState=STATE_READY
+//        var playWhenReady=false
+        if (MPVLib.MPV_EVENT_START_FILE==mpvEvent){
+            pState=STATE_BUFFERING
+        }else if (MPVLib.MPV_EVENT_FILE_LOADED==mpvEvent){
+//            playWhenReady=true
+            pState=STATE_READY
+        }else if (MPVLib.MPV_EVENT_END_FILE==mpvEvent){
+            pState=STATE_ENDED
+        }
+        val isBuffering = MPVLib.getPropertyBoolean("paused-for-cache")
+        if (isBuffering!=null&&isBuffering) {
+            pState=STATE_BUFFERING
+        }
 
-        val builder = State.Builder()
-        // 1. 获取 mpv 状态
         var duration = MPVLib.getPropertyInt("duration/full")
         if (duration == null) {
             duration =0
@@ -87,15 +127,14 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
         }
 
         var pause = MPVLib.getPropertyBoolean("pause")
-
-
+        if (pause == null) {
+            pause = true
+        }
 
 
         val durationUs = Util.msToUs(duration*1000.toLong())
         val positionUs = Util.msToUs(position*1000.toLong())
-//        val mediaItem = getMediaItemAt(0)
         val mediaItemData = MediaItemData.Builder(UUID.randomUUID())
-//            .setMediaItem(mediaItem)
             .setDefaultPositionUs(positionUs)
             .setDurationUs(durationUs)
             .setIsSeekable(true)
@@ -126,6 +165,7 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
                     COMMAND_SET_VIDEO_SURFACE,
                     COMMAND_GET_TEXT,
                     COMMAND_RELEASE,
+                    COMMAND_SET_TRACK_SELECTION_PARAMETERS
                 )
 //                .addIf(
 //                    COMMAND_SET_TRACK_SELECTION_PARAMETERS, trackSelector.isSetParametersSupported(),
@@ -137,17 +177,12 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 //                .addIf(COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
                 .build()
 
-
-        builder
+        val builder = State.Builder()
             .setPlaylist(listMediaItemData)
             .setAvailableCommands(permanentAvailableCommands)
-            .setAdPositionMs(20)
-
-        if (pause!=null){
-            builder
-                .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+            .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+            .setPlaybackState(pState)
 //                .setPlaybackState(if (pause) STATE_READY else STATE_IDLE  )
-        }
         return builder.build()
     }
 
@@ -170,14 +205,11 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         MPVLib.setPropertyBoolean("pause", !playWhenReady)
         return Futures.immediateFuture(null)
-//        return createMPVFuture("pause", !playWhenReady)
 
     }
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
         MPVLib.setPropertyInt("time-pos/full", positionMs.toInt())
-
         return Futures.immediateFuture(null)
-//        return createMPVFuture("time-pos/full", positionMs)
     }
 
     override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> {
@@ -240,8 +272,7 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
                 MPVLib.attachSurface(holder.surface)
                 // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily not
                 MPVLib.setOptionString("force-window", "yes")
-//                val mediaItemAt = getMediaItemAt(0)
-//                MPVLib.command(arrayOf("loadfile", "https://jellyd.1133666.xyz:33/Videos/3bba72a1-2db9-4435-dc33-f15b96294c5c/stream?static=true&playSessionId=27786317cdbe4ca5a689ab7a83eeb895&mediaSourceId=3bba72a12db94435dc33f15b96294c5c&deviceId=d9c9170e742a2503a6776e27876042db920282d173cc727c&streamOptions=%7B%7D&enableAudioVbrEncoding=true"))
+//              MPVLib.command(arrayOf("loadfile", "https://jellyd.1133666.xyz:33/Videos/3bba72a1-2db9-4435-dc33-f15b96294c5c/stream?static=true&playSessionId=27786317cdbe4ca5a689ab7a83eeb895&mediaSourceId=3bba72a12db94435dc33f15b96294c5c&deviceId=d9c9170e742a2503a6776e27876042db920282d173cc727c&streamOptions=%7B%7D&enableAudioVbrEncoding=true"))
 
             }
 
@@ -256,7 +287,6 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 // Surface 即将销毁，必须停止使用
-//                Log.w(TAG, "detaching surface")
                 MPVLib.setPropertyString("vo", "null")
                 MPVLib.setPropertyString("force-window", "no")
                 // Note that before calling detachSurface() we need to be sure that libmpv
@@ -265,7 +295,6 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
                 // setting a property will wait for VO deinit.
                 MPVLib.command(arrayOf("stop"))
                 MPVLib.detachSurface()
-//                MPVLib.destroy()
             }
         }
         surfaceHolder.addCallback(callback)
@@ -302,7 +331,7 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
             Property("shuffle", MPV_FORMAT_FLAG),
             Property("hwdec-current"),
             Property("mute", MPV_FORMAT_FLAG),
-            Property("current-tracks/audio/selected")
+            Property("current-tracks/audio/selected"),
         )
         for ((name, format) in p)
             MPVLib.observeProperty(name, format)
