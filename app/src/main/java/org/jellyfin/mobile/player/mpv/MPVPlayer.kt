@@ -106,7 +106,8 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
     fun preInitOptions(){
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
-        MPVLib.setOptionString("hwdec", "yes")
+//        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
+        MPVLib.setOptionString("hwdec", "no")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("gpu-context", "android")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
@@ -126,7 +127,7 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
         // we need to call write-watch-later manually
         MPVLib.setOptionString("save-position-on-quit", "no")
         // could mess up VO init before surfaceCreated() is called
-        MPVLib.setOptionString("force-window", "yes")
+//        MPVLib.setOptionString("force-window", "yes")
         // need to idle at least once for playFile() logic to work
         MPVLib.setOptionString("idle", "once")
     }
@@ -188,7 +189,8 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
 
-        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4");
+//        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4")
+        val file = File(context.filesDir, "sample-5s.mp4")
         MPVLib.command(arrayOf("loadfile",file.absolutePath))
 
 //        MPVLib.command(arrayOf("loadfile", uri.toString()))
@@ -261,6 +263,7 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
 
         val callback = object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
+
                 // Surface 创建完成，可以安全使用
                 MPVLib.attachSurface(holder.surface)
                 // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily not
