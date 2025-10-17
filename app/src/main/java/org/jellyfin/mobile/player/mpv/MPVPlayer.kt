@@ -29,7 +29,8 @@ import java.util.UUID
 /**
  * @author dr
  */
-class MPVPlayer(applicationLooper: Looper, private val context: Context) : SimpleBasePlayer(applicationLooper) {
+class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper) {
+    private var initFlag: Boolean = false
     private var mpvEvent: Int = MPVLib.MPV_EVENT_NONE
     private val permanentAvailableCommands =
         Player.Commands.Builder()
@@ -65,8 +66,7 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
 //                .addIf(COMMAND_ADJUST_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
 //                .addIf(COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
             .build()
-
-    init {
+    private fun initMpv(context: Context){
         val mainHandler = Handler(Looper.getMainLooper())
         MPVLib.create(context)
         preInitOptions()
@@ -100,6 +100,7 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
             }
         }
         MPVLib.addObserver(observer)
+        initFlag=true
     }
 
 
@@ -107,7 +108,7 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
 //        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
-        MPVLib.setOptionString("hwdec", "no")
+        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("gpu-context", "android")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
@@ -133,6 +134,11 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
     }
 
     override fun getState(): State {
+        if (!initFlag){
+            return State.Builder()
+                .setAvailableCommands(permanentAvailableCommands)
+                .build()
+        }
         var pState=STATE_READY
         if (MPVLib.MPV_EVENT_START_FILE==mpvEvent){
             pState=STATE_BUFFERING
@@ -188,12 +194,15 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
         val mediaItem = mediaItems[0]
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
+        MPVLib.command(arrayOf("loadfile", uri.toString()))
 
 //        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4")
-        val file = File(context.filesDir, "sample-5s.mp4")
-        MPVLib.command(arrayOf("loadfile",file.absolutePath))
+//        val file = File(context.filesDir, "sample-5s.mp4")
+//        val file = File(context.filesDir, "sample-20s.mp4")
+//        val file = File(context.filesDir, "sample.mp4")
+//        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/sample-20s.mp4"))
 
-//        MPVLib.command(arrayOf("loadfile", uri.toString()))
+
         return Futures.immediateFuture(null)
 
     }
@@ -256,8 +265,9 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
     }
 
     override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> {
-        val surfaceView = videoOutput as SurfaceView?
-        val surfaceHolder = surfaceView?.holder ?: return super.handleSetVideoOutput(videoOutput)
+        val surfaceView = videoOutput as SurfaceView? ?: return super.handleSetVideoOutput(videoOutput)
+        initMpv(surfaceView.context)
+        val surfaceHolder = surfaceView.holder
         // 移除旧 callback
 
 
@@ -278,7 +288,9 @@ class MPVPlayer(applicationLooper: Looper, private val context: Context) : Simpl
                 width: Int,
                 height: Int,
             ) {
-                MPVLib.setPropertyString("android-surface-size", "${width}x$height")
+                MPVLib
+                    .setPropertyString("android-surface-size",
+                        "${width}x${height}")
             }
 
             override fun surfaceDestroyed(holder: SurfaceHolder) {

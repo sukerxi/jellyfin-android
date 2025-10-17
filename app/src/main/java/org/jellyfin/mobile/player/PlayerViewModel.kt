@@ -14,6 +14,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -273,7 +274,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 }
             }
             VideoPlayerType.MPV_PLAYER -> {
-                _player.value = MPVPlayer(Looper.getMainLooper(), getApplication()).apply {
+                _player.value = MPVPlayer(Looper.getMainLooper()).apply {
                     addListener(this@PlayerViewModel)
                     applyDefaultAudioAttributes(C.AUDIO_CONTENT_TYPE_MOVIE)
                 }
@@ -326,6 +327,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 player.reportPlaybackStart(jellyfinMediaSource)
             }
         }
+    }
+
+    fun loadDirect( playWhenReady: Boolean) {
+        val player = playerOrNull ?: return
+        player.setMediaItem(MediaItem.fromUri("http://baidu.com"))
+        player.prepare()
+
+        initialTracksSelected.set(false)
+
+        val startTime = Duration.ZERO
+        if (startTime > Duration.ZERO) player.seekTo(startTime.inWholeMilliseconds)
+
+
+        player.playWhenReady = playWhenReady
     }
 
     private fun startProgressUpdates() {
