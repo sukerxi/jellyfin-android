@@ -12,6 +12,8 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.VideoSize
+import androidx.media3.common.util.Size
 import androidx.media3.common.util.Util
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -21,13 +23,49 @@ import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_INT64
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_STRING
+import java.io.File
 import java.util.UUID
 
 /**
  * @author dr
  */
-class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(applicationLooper) {
+class MPVPlayer(applicationLooper: Looper, private val context: Context) : SimpleBasePlayer(applicationLooper) {
     private var mpvEvent: Int = MPVLib.MPV_EVENT_NONE
+    private val permanentAvailableCommands =
+        Player.Commands.Builder()
+            .addAll(
+                COMMAND_PLAY_PAUSE,
+                COMMAND_PREPARE,
+                COMMAND_STOP,
+                COMMAND_SET_SPEED_AND_PITCH,
+//                    COMMAND_SET_SHUFFLE_MODE,
+//                    COMMAND_SET_REPEAT_MODE,
+                COMMAND_GET_CURRENT_MEDIA_ITEM,
+                COMMAND_GET_TIMELINE,
+                COMMAND_GET_METADATA,
+                COMMAND_SET_PLAYLIST_METADATA,
+                COMMAND_SET_MEDIA_ITEM,
+//                    COMMAND_CHANGE_MEDIA_ITEMS,
+                COMMAND_GET_TRACKS,
+                COMMAND_GET_AUDIO_ATTRIBUTES,
+                COMMAND_SET_AUDIO_ATTRIBUTES,
+                COMMAND_GET_VOLUME,
+//                    COMMAND_SET_VOLUME,
+                COMMAND_SET_VIDEO_SURFACE,
+                COMMAND_GET_TEXT,
+                COMMAND_RELEASE,
+                COMMAND_SET_TRACK_SELECTION_PARAMETERS
+            )
+//                .addIf(
+//                    COMMAND_SET_TRACK_SELECTION_PARAMETERS, trackSelector.isSetParametersSupported(),
+//                )
+//                .addIf(COMMAND_GET_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
+//                .addIf(COMMAND_SET_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
+//                .addIf(COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
+//                .addIf(COMMAND_ADJUST_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
+//                .addIf(COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
+            .build()
+
     init {
         val mainHandler = Handler(Looper.getMainLooper())
         MPVLib.create(context)
@@ -38,18 +76,14 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 
         val observer = object : MPVLib.EventObserver {
             override fun eventProperty(property: String) {
-//                TODO("Not yet implemented")
+//                if (property=="android-surface-size"){
+//                    mainHandler.post {
+//                        invalidateState()
+//                    }
+//                }
             }
-
-            override fun eventProperty(property: String, value: Long) {
-
-
-            }
-
-            override fun eventProperty(property: String, value: Double) {
-//                TODO("Not yet implemented")
-            }
-
+            override fun eventProperty(property: String, value: Long) {}
+            override fun eventProperty(property: String, value: Double) {}
             override fun eventProperty(property: String, value: Boolean) {
                 if(property=="paused-for-cache"){
                     mainHandler.post {
@@ -57,11 +91,7 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
                     }
                 }
             }
-
-            override fun eventProperty(property: String, value: String) {
-//                TODO("Not yet implemented")
-            }
-
+            override fun eventProperty(property: String, value: String) {}
             override fun event(eventId: Int) {
                 mainHandler.post {
                     this@MPVPlayer.mpvEvent=eventId
@@ -78,7 +108,7 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
         MPVLib.setOptionString("hwdec", "yes")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
-        MPVLib.setOptionString("gpu-context", "auto")  //auto
+        MPVLib.setOptionString("gpu-context", "android")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
 
         MPVLib.setOptionString("ao", "audiotrack,opensles")
@@ -96,40 +126,35 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
         // we need to call write-watch-later manually
         MPVLib.setOptionString("save-position-on-quit", "no")
         // could mess up VO init before surfaceCreated() is called
-        MPVLib.setOptionString("force-window", "no")
+        MPVLib.setOptionString("force-window", "yes")
         // need to idle at least once for playFile() logic to work
         MPVLib.setOptionString("idle", "once")
     }
 
     override fun getState(): State {
         var pState=STATE_READY
-//        var playWhenReady=false
         if (MPVLib.MPV_EVENT_START_FILE==mpvEvent){
             pState=STATE_BUFFERING
         }else if (MPVLib.MPV_EVENT_FILE_LOADED==mpvEvent){
-//            playWhenReady=true
             pState=STATE_READY
         }else if (MPVLib.MPV_EVENT_END_FILE==mpvEvent){
             pState=STATE_ENDED
         }
-        val isBuffering = MPVLib.getPropertyBoolean("paused-for-cache")
-        if (isBuffering!=null&&isBuffering) {
+        val isBuffering = MPVLib.getPropertyBoolean("paused-for-cache")?:false
+        if (isBuffering) {
             pState=STATE_BUFFERING
         }
 
-        var duration = MPVLib.getPropertyInt("duration/full")
-        if (duration == null) {
-            duration =0
-        }
-        var position = MPVLib.getPropertyInt("time-pos/full")
-        if (position == null) {
-            position =0
-        }
+        val duration = MPVLib.getPropertyInt("duration/full")?:0
 
-        var pause = MPVLib.getPropertyBoolean("pause")
-        if (pause == null) {
-            pause = true
-        }
+        val position = MPVLib.getPropertyInt("time-pos/full")?:0
+
+        val pause = MPVLib.getPropertyBoolean("pause")?:true
+
+
+        val dw = MPVLib.getPropertyInt("video-params/dw")?:0
+        val dh = MPVLib.getPropertyInt("video-params/dh")?:0
+        val videoSize= VideoSize(dw, dh)
 
 
         val durationUs = Util.msToUs(duration*1000.toLong())
@@ -141,48 +166,16 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
             .build()
         val listMediaItemData = arrayListOf(mediaItemData)
 
-
-        val permanentAvailableCommands =
-            Player.Commands.Builder()
-                .addAll(
-                    COMMAND_PLAY_PAUSE,
-                    COMMAND_PREPARE,
-                    COMMAND_STOP,
-                    COMMAND_SET_SPEED_AND_PITCH,
-//                    COMMAND_SET_SHUFFLE_MODE,
-//                    COMMAND_SET_REPEAT_MODE,
-                    COMMAND_GET_CURRENT_MEDIA_ITEM,
-                    COMMAND_GET_TIMELINE,
-                    COMMAND_GET_METADATA,
-                    COMMAND_SET_PLAYLIST_METADATA,
-                    COMMAND_SET_MEDIA_ITEM,
-//                    COMMAND_CHANGE_MEDIA_ITEMS,
-                    COMMAND_GET_TRACKS,
-                    COMMAND_GET_AUDIO_ATTRIBUTES,
-                    COMMAND_SET_AUDIO_ATTRIBUTES,
-                    COMMAND_GET_VOLUME,
-//                    COMMAND_SET_VOLUME,
-                    COMMAND_SET_VIDEO_SURFACE,
-                    COMMAND_GET_TEXT,
-                    COMMAND_RELEASE,
-                    COMMAND_SET_TRACK_SELECTION_PARAMETERS
-                )
-//                .addIf(
-//                    COMMAND_SET_TRACK_SELECTION_PARAMETERS, trackSelector.isSetParametersSupported(),
-//                )
-//                .addIf(COMMAND_GET_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_SET_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_ADJUST_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
-                .build()
-
         val builder = State.Builder()
             .setPlaylist(listMediaItemData)
             .setAvailableCommands(permanentAvailableCommands)
             .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaybackState(pState)
-//                .setPlaybackState(if (pause) STATE_READY else STATE_IDLE  )
+            .setVideoSize(videoSize)
+            .setPlaybackSuppressionReason(PLAYBACK_SUPPRESSION_REASON_NONE)
+            .setContentPositionMs {
+                (MPVLib.getPropertyInt("time-pos/full")?:0)*1000.toLong()
+            }
         return builder.build()
     }
 
@@ -191,15 +184,16 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
         startIndex: Int,
         startPositionMs: Long,
     ): ListenableFuture<*> {
-//        val mediaItem = mediaItems[0]
-//        val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
-//        val uri = localConfiguration.uri
+        val mediaItem = mediaItems[0]
+        val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
+        val uri = localConfiguration.uri
+
+        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4");
+        MPVLib.command(arrayOf("loadfile",file.absolutePath))
 
 //        MPVLib.command(arrayOf("loadfile", uri.toString()))
-
         return Futures.immediateFuture(null)
-        //        return createMPVFuture(MPVLib.MPV_EVENT_FILE_LOADED,
-//            arrayOf("loadfile", uri.toString()))
+
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
@@ -250,7 +244,6 @@ class MPVPlayer(applicationLooper: Looper, context: Context) : SimpleBasePlayer(
 
 
     override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
-        //todo
         return Futures.immediateFuture(null)
     }
 

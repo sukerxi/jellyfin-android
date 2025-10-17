@@ -305,17 +305,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         if (player is ExoPlayer){
             player.setMediaSource(exoMediaSource)
         }else if (player is MPVPlayer){
-//             jellyd.1133666.xyz:33/Videos/3bba72a1-2db9-4435-dc33-f15b96294c5c/stream?static=true&playSessionId=27786317cdbe4ca5a689ab7a83eeb895&mediaSourceId=3bba72a12db94435dc33f15b96294c5c&deviceId=d9c9170e742a2503a6776e27876042db920282d173cc727c&streamOptions=%7B%7D&enableAudioVbrEncoding=true
             player.setMediaItem(queueManager.createVideoMediaItem(jellyfinMediaSource))
         }
 
         player.prepare()
-
-        if (player is MPVPlayer){
-            val mediaBaseInfo = queueManager.generateMediaSourceBaseInfo(jellyfinMediaSource)
-//             jellyd.1133666.xyz:33/Videos/3bba72a1-2db9-4435-dc33-f15b96294c5c/stream?static=true&playSessionId=27786317cdbe4ca5a689ab7a83eeb895&mediaSourceId=3bba72a12db94435dc33f15b96294c5c&deviceId=d9c9170e742a2503a6776e27876042db920282d173cc727c&streamOptions=%7B%7D&enableAudioVbrEncoding=true
-            MPVLib.command(arrayOf("loadfile",mediaBaseInfo.first))
-        }
 
         initialTracksSelected.set(false)
 
