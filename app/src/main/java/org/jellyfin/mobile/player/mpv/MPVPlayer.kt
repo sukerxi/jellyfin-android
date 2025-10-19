@@ -12,7 +12,6 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackSelectionParameters
-import androidx.media3.common.VideoSize
 import androidx.media3.common.util.Util
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -66,6 +65,12 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
 //                .addIf(COMMAND_ADJUST_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
 //                .addIf(COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
             .build()
+
+    private val eventsNeedListen=arrayOf(
+        MPVLib.MPV_EVENT_START_FILE,
+        MPVLib.MPV_EVENT_FILE_LOADED,
+        MPVLib.MPV_EVENT_END_FILE,
+    )
     private fun initMpv(context: Context){
         val mainHandler = Handler(Looper.getMainLooper())
         MPVLib.create(context)
@@ -75,13 +80,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         observeProperties()
 
         val observer = object : MPVLib.EventObserver {
-            override fun eventProperty(property: String) {
-//                if (property=="android-surface-size"){
-//                    mainHandler.post {
-//                        invalidateState()
-//                    }
-//                }
-            }
+            override fun eventProperty(property: String) {}
             override fun eventProperty(property: String, value: Long) {}
             override fun eventProperty(property: String, value: Double) {}
             override fun eventProperty(property: String, value: Boolean) {
@@ -93,9 +92,11 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
             }
             override fun eventProperty(property: String, value: String) {}
             override fun event(eventId: Int) {
-                mainHandler.post {
-                    this@MPVPlayer.mpvEvent=eventId
-                    invalidateState()
+                if (eventsNeedListen.contains(eventId)) {
+                    mainHandler.post {
+                        this@MPVPlayer.mpvEvent=eventId
+                        invalidateState()
+                    }
                 }
             }
         }
@@ -107,8 +108,8 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
     fun preInitOptions(){
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
-//        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
-        MPVLib.setOptionString("hwdec", "no")
+        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
+//        MPVLib.setOptionString("hwdec", "no")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("gpu-context", "android")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
@@ -169,11 +170,6 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         val pause = MPVLib.getPropertyBoolean("pause")?:true
 
 
-        val dw = MPVLib.getPropertyInt("video-params/dw")?:0
-        val dh = MPVLib.getPropertyInt("video-params/dh")?:0
-        val videoSize= VideoSize(dw, dh)
-
-
         val durationUs = Util.msToUs(duration*1000.toLong())
         val positionUs = Util.msToUs(position*1000.toLong())
         val mediaItemData = MediaItemData.Builder(UUID.randomUUID())
@@ -188,7 +184,6 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
             .setAvailableCommands(permanentAvailableCommands)
             .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaybackState(pState)
-            .setVideoSize(videoSize)
             .setPlaybackSuppressionReason(PLAYBACK_SUPPRESSION_REASON_NONE)
             .setContentPositionMs {
                 (MPVLib.getPropertyInt("time-pos/full")?:0)*1000.toLong()
@@ -205,13 +200,13 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         val mediaItem = mediaItems[0]
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
-        MPVLib.command(arrayOf("loadfile", uri.toString()))
+//        MPVLib.command(arrayOf("loadfile", uri.toString()))
 
 //        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4")
 //        val file = File(context.filesDir, "sample-5s.mp4")
 //        val file = File(context.filesDir, "sample-20s.mp4")
 //        val file = File(context.filesDir, "sample.mp4")
-//        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/sample-20s.mp4"))
+        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/sample.mp4"))
 
 
         return Futures.immediateFuture(null)
