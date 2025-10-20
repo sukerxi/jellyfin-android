@@ -275,6 +275,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
             }
             VideoPlayerType.MPV_PLAYER -> {
                 _player.value = MPVPlayer(Looper.getMainLooper()).apply {
+                    setAnalyticsCollector(analyticsCollector)
                     addListener(this@PlayerViewModel)
                     applyDefaultAudioAttributes(C.AUDIO_CONTENT_TYPE_MOVIE)
                 }

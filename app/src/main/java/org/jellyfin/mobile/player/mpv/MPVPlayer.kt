@@ -12,7 +12,12 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.util.Assertions
+import androidx.media3.common.util.Clock
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
+import androidx.media3.exoplayer.analytics.AnalyticsCollector
+import com.google.common.base.Function
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dev.jdtech.mpv.MPVLib
@@ -28,7 +33,6 @@ import java.util.UUID
  */
 class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper) {
     private var initFlag: Boolean = false
-    private var readyFlag: Boolean = false
     private var mpvEvent: Int = MPVLib.MPV_EVENT_NONE
     private val permanentAvailableCommands =
         Player.Commands.Builder()
@@ -54,7 +58,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
                 COMMAND_GET_TEXT,
                 COMMAND_RELEASE,
                 COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
-                COMMAND_SET_TRACK_SELECTION_PARAMETERS
+                COMMAND_SET_TRACK_SELECTION_PARAMETERS,
             )
 //                .addIf(
 //                    COMMAND_SET_TRACK_SELECTION_PARAMETERS, trackSelector.isSetParametersSupported(),
@@ -108,8 +112,8 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
     fun preInitOptions(){
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
-        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
-//        MPVLib.setOptionString("hwdec", "no")
+//        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
+        MPVLib.setOptionString("hwdec", "no")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("gpu-context", "android")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
@@ -122,41 +126,31 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         MPVLib.setOptionString("demuxer-max-back-bytes", "${cacheMegs * 1024 * 1024}")
 
         MPVLib.setOptionString("vd-lavc-film-grain", "cpu")
-        // Disable youtube-dl/yt-dlp integration (not needed for Jellyfin streams)
         MPVLib.setOptionString("ytdl", "no")
+        MPVLib.setOptionString("cache-pause-initial", "yes")
     }
     fun postInitOptions() {
-        // we need to call write-watch-later manually
         MPVLib.setOptionString("save-position-on-quit", "no")
-        // could mess up VO init before surfaceCreated() is called
-//        MPVLib.setOptionString("force-window", "yes")
-        // need to idle at least once for playFile() logic to work
         MPVLib.setOptionString("idle", "once")
     }
 
     override fun getState(): State {
-        if (!initFlag){
-            return State.Builder()
-                .setAvailableCommands(permanentAvailableCommands)
-                .build()
-        }
+
         var pState=STATE_READY
         var pNewlyRenderedFirstFrame=false
         if (MPVLib.MPV_EVENT_START_FILE==mpvEvent){
             pState=STATE_BUFFERING
         }else if (MPVLib.MPV_EVENT_FILE_LOADED==mpvEvent){
             pState=STATE_READY
-            readyFlag=true
             pNewlyRenderedFirstFrame=true
         }else if (MPVLib.MPV_EVENT_END_FILE==mpvEvent){
             pState=STATE_ENDED
         }
-        if (!readyFlag){
+        if (!initFlag||pState!=STATE_READY){
             return State.Builder()
                 .setAvailableCommands(permanentAvailableCommands)
                 .build()
         }
-
 
         val isBuffering = MPVLib.getPropertyBoolean("paused-for-cache")?:false
         if (isBuffering) {
@@ -188,6 +182,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
             .setContentPositionMs {
                 (MPVLib.getPropertyInt("time-pos/full")?:0)*1000.toLong()
             }
+            .setPlaybackParameters(PlaybackParameters((MPVLib.getPropertyDouble("speed")?:0).toFloat()))
             .setNewlyRenderedFirstFrame(pNewlyRenderedFirstFrame)
         return builder.build()
     }
@@ -201,12 +196,10 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
 //        MPVLib.command(arrayOf("loadfile", uri.toString()))
-
-//        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4")
-//        val file = File(context.filesDir, "sample-5s.mp4")
 //        val file = File(context.filesDir, "sample-20s.mp4")
 //        val file = File(context.filesDir, "sample.mp4")
-        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/sample.mp4"))
+//        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4")
+        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/458700_Finance_District_3840x2160.mp4"))
 
 
         return Futures.immediateFuture(null)
@@ -220,8 +213,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
     }
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
         val absolutePos= positionMs/1000
-        val currentPos = MPVLib.getPropertyInt("time-pos/full") ?: 0
-        MPVLib.command(arrayOf("seek", (absolutePos-currentPos).toString()))
+        MPVLib.command(arrayOf("seek", (absolutePos).toString(), "absolute"))
         return Futures.immediateFuture(null)
     }
 
@@ -263,6 +255,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
 
 
     override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
+        MPVLib.setPropertyDouble("speed", playbackParameters.speed.toDouble())
         return Futures.immediateFuture(null)
     }
 
@@ -276,42 +269,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         val surfaceView = videoOutput as SurfaceView? ?: return super.handleSetVideoOutput(videoOutput)
         initMpv(surfaceView.context)
         val surfaceHolder = surfaceView.holder
-
-
-        val callback = object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-
-                // Surface 创建完成，可以安全使用
-                MPVLib.attachSurface(holder.surface)
-                // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily not
-//                MPVLib.setOptionString("force-window", "yes")
-//              MPVLib.command(arrayOf("loadfile", "https://jellyd.1133666.xyz:33/Videos/3bba72a1-2db9-4435-dc33-f15b96294c5c/stream?static=true&playSessionId=27786317cdbe4ca5a689ab7a83eeb895&mediaSourceId=3bba72a12db94435dc33f15b96294c5c&deviceId=d9c9170e742a2503a6776e27876042db920282d173cc727c&streamOptions=%7B%7D&enableAudioVbrEncoding=true"))
-
-            }
-
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int,
-            ) {
-                MPVLib
-                    .setPropertyString("android-surface-size",
-                        "${width}x${height}")
-            }
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                // Surface 即将销毁，必须停止使用
-                MPVLib.setPropertyString("vo", "null")
-                MPVLib.setPropertyString("force-window", "no")
-                // Note that before calling detachSurface() we need to be sure that libmpv
-                // is done using the surface.
-                // FIXME: There could be a race condition here, because I don't think
-                // setting a property will wait for VO deinit.
-                MPVLib.command(arrayOf("stop"))
-                MPVLib.detachSurface()
-            }
-        }
+        surfaceHolder.removeCallback(callback)
         surfaceHolder.addCallback(callback)
 
         return Futures.immediateFuture(null)
@@ -352,4 +310,38 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
             MPVLib.observeProperty(name, format)
     }
 
+
+
+    @UnstableApi
+    fun setAnalyticsCollector(analyticsCollector: AnalyticsCollector?) {
+        Assertions.checkNotNull<AnalyticsCollector?>(analyticsCollector)
+        analyticsCollector!!.setPlayer(this, applicationLooper)
+    }
+
+    val callback = object : SurfaceHolder.Callback {
+        override fun surfaceCreated(holder: SurfaceHolder) {
+            MPVLib.attachSurface(holder.surface)
+            // This forces mpv to render subs/osd/whatever into our surface even if it would ordinarily not
+//                MPVLib.setOptionString("force-window", "yes")
+        }
+        override fun surfaceChanged(
+            holder: SurfaceHolder,
+            format: Int,
+            width: Int,
+            height: Int,
+        ) {
+            MPVLib.attachSurface(holder.surface)
+            MPVLib
+                .setPropertyString(
+                    "android-surface-size",
+                    "${width}x${height}",
+                )
+        }
+        override fun surfaceDestroyed(holder: SurfaceHolder) {
+            MPVLib.setPropertyString("vo", "null")
+            MPVLib.setPropertyString("force-window", "no")
+            MPVLib.command(arrayOf("stop"))
+            MPVLib.detachSurface()
+        }
+    }
 }
