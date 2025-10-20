@@ -13,11 +13,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.Assertions
-import androidx.media3.common.util.Clock
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.analytics.AnalyticsCollector
-import com.google.common.base.Function
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dev.jdtech.mpv.MPVLib
@@ -26,6 +24,7 @@ import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_INT64
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_STRING
+import org.jellyfin.mobile.player.ui.DecoderType
 import java.util.UUID
 
 /**
@@ -34,6 +33,13 @@ import java.util.UUID
 class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper) {
     private var initFlag: Boolean = false
     private var mpvEvent: Int = MPVLib.MPV_EVENT_NONE
+
+    private var decoderType: DecoderType= DecoderType.HARDWARE
+
+    fun setDecoderType(decoderType: DecoderType?) {
+        this.decoderType = if (decoderType==null)  DecoderType.HARDWARE else decoderType
+    }
+
     private val permanentAvailableCommands =
         Player.Commands.Builder()
             .addAll(
@@ -53,21 +59,13 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
                 COMMAND_GET_AUDIO_ATTRIBUTES,
                 COMMAND_SET_AUDIO_ATTRIBUTES,
                 COMMAND_GET_VOLUME,
-//                    COMMAND_SET_VOLUME,
+                COMMAND_SET_VOLUME,
                 COMMAND_SET_VIDEO_SURFACE,
                 COMMAND_GET_TEXT,
                 COMMAND_RELEASE,
                 COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
                 COMMAND_SET_TRACK_SELECTION_PARAMETERS,
             )
-//                .addIf(
-//                    COMMAND_SET_TRACK_SELECTION_PARAMETERS, trackSelector.isSetParametersSupported(),
-//                )
-//                .addIf(COMMAND_GET_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_SET_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_SET_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_ADJUST_DEVICE_VOLUME, builder.deviceVolumeControlEnabled)
-//                .addIf(COMMAND_ADJUST_DEVICE_VOLUME_WITH_FLAGS, builder.deviceVolumeControlEnabled)
             .build()
 
     private val eventsNeedListen=arrayOf(
@@ -76,6 +74,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         MPVLib.MPV_EVENT_END_FILE,
     )
     private fun initMpv(context: Context){
+        MPVLib.destroy()
         val mainHandler = Handler(Looper.getMainLooper())
         MPVLib.create(context)
         preInitOptions()
@@ -112,8 +111,7 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
     fun preInitOptions(){
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "gpu") // output  gpu_next  gpu libmpv
-//        MPVLib.setOptionString("hwdec", "mediacodec,mediacodec-copy")
-        MPVLib.setOptionString("hwdec", "no")
+        MPVLib.setOptionString("hwdec", if (decoderType == DecoderType.HARDWARE) "mediacodec,mediacodec-copy"  else "no")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("gpu-context", "android")  //auto
         MPVLib.setOptionString("opengl-es", "yes")
@@ -195,13 +193,11 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         val mediaItem = mediaItems[0]
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
-//        MPVLib.command(arrayOf("loadfile", uri.toString()))
+        MPVLib.command(arrayOf("loadfile", uri.toString()))
 //        val file = File(context.filesDir, "sample-20s.mp4")
-//        val file = File(context.filesDir, "sample.mp4")
-//        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4")
-        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/458700_Finance_District_3840x2160.mp4"))
-
-
+//        val file = File(context.filesDir, "sample.mp4") duangxiao
+//        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4") office
+//        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/sample.mp4"))
         return Futures.immediateFuture(null)
 
     }
@@ -271,6 +267,9 @@ class MPVPlayer(applicationLooper: Looper) : SimpleBasePlayer(applicationLooper)
         val surfaceHolder = surfaceView.holder
         surfaceHolder.removeCallback(callback)
         surfaceHolder.addCallback(callback)
+        if (!surfaceHolder.isCreating){
+            MPVLib.attachSurface(surfaceHolder.surface)
+        }
 
         return Futures.immediateFuture(null)
     }
