@@ -430,9 +430,6 @@ class PlayerFragment : Fragment(), BackPressInterceptor {
             // Reset screen brightness
             window.brightness = BRIGHTNESS_OVERRIDE_NONE
         }
-        if (appPreferences.videoPlayerType== VideoPlayerType.MPV_PLAYER){
-            MPVLib.destroy()
-        }
     }
 
     fun setPlayerMenuHelper(menuHelper: PlayerMenuHelper) {

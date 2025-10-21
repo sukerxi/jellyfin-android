@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.application
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -274,10 +275,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 }
             }
             VideoPlayerType.MPV_PLAYER -> {
-                _player.value = MPVPlayer(Looper.getMainLooper()).apply {
+                _player.value =MPVPlayer.getInstance(application).apply {
                     setAnalyticsCollector(analyticsCollector)
                     addListener(this@PlayerViewModel)
-                    setDecoderType(_decoderType.value)
+                    setProperty("hwdec",if (_decoderType.value==null||_decoderType.value==DecoderType.HARDWARE) "auto" else "no" )
                     applyDefaultAudioAttributes(C.AUDIO_CONTENT_TYPE_MOVIE)
                 }
             }
