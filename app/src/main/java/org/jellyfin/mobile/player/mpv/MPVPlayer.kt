@@ -31,6 +31,7 @@ import java.util.UUID
  */
 class MPVPlayer private constructor(looper: Looper, private val context: Application) : SimpleBasePlayer(looper) {
     private var mpvEvent: Int = MPVLib.MPV_EVENT_NONE
+    private var playerState: Int = STATE_IDLE
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mpvLibEventObserver = object : MPVLib.EventObserver {
@@ -40,6 +41,8 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
         override fun eventProperty(property: String, value: Boolean) {
             if(property=="paused-for-cache"){
                 mainHandler.post {
+                    mpvEvent =if (value) MPV_EVENT_START_PAUSED_FOR_CACHE_START
+                    else  MPV_EVENT_START_PAUSED_FOR_CACHE_END
                     invalidateState()
                 }
             }
@@ -58,7 +61,6 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
     val surfaceHolderCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
             MPVLib.setPropertyString("vo", "gpu_next,gpu")
-            MPVLib.addObserver(mpvLibEventObserver)
             MPVLib.attachSurface(holder.surface)
             MPVLib.setOptionString("force-window", "yes")
         }
@@ -72,8 +74,8 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
         }
         override fun surfaceDestroyed(holder: SurfaceHolder) {
             MPVLib.setPropertyString("vo", "null")
-            MPVLib.setOptionString("force-window", "no")
-            MPVLib.removeObserver(mpvLibEventObserver)
+            MPVLib.setPropertyString("force-window", "no")
+            MPVLib.command(arrayOf("stop"))
             MPVLib.detachSurface()
         }
     }
@@ -87,11 +89,15 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
                 INSTANCE ?: MPVPlayer(Looper.getMainLooper(), application).also { INSTANCE = it }
             }
         }
-
+        //paused-for-cache event
+        private val MPV_EVENT_START_PAUSED_FOR_CACHE_START:Int =100
+        private val MPV_EVENT_START_PAUSED_FOR_CACHE_END:Int =101
         private val eventsNeedListen=arrayOf(
             MPVLib.MPV_EVENT_START_FILE,
             MPVLib.MPV_EVENT_FILE_LOADED,
             MPVLib.MPV_EVENT_END_FILE,
+            MPVLib.MPV_EVENT_PLAYBACK_RESTART,
+            MPVLib.MPV_EVENT_SEEK,
         )
 
         private val permanentAvailableCommands =
@@ -113,7 +119,6 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
                     COMMAND_SET_VOLUME,
                     COMMAND_SET_VIDEO_SURFACE,
                     COMMAND_GET_TEXT,
-                    // COMMAND_RELEASE,
                     COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
                     COMMAND_SET_TRACK_SELECTION_PARAMETERS,
                     // COMMAND_SET_SHUFFLE_MODE,
@@ -147,10 +152,10 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
         MPVLib.init()
 
         MPVLib.setOptionString("save-position-on-quit", "no")
-        MPVLib.setOptionString("idle", "once")
+//        MPVLib.setOptionString("idle", "once")
         // MPVLib.setOptionString("force-window", "yes")
-        // MPVLib.addObserver(mpvLibEventObserver)
         observeProperties()
+        MPVLib.addObserver(mpvLibEventObserver)
     }
 
     private fun observeProperties() {
@@ -185,26 +190,6 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
 
     override fun getState(): State {
 
-        var pState=STATE_READY
-        var pNewlyRenderedFirstFrame=false
-        if (MPVLib.MPV_EVENT_START_FILE==mpvEvent){
-            pState=STATE_BUFFERING
-        }else if (MPVLib.MPV_EVENT_FILE_LOADED==mpvEvent){
-            pState=STATE_READY
-            pNewlyRenderedFirstFrame=true
-        }else if (MPVLib.MPV_EVENT_END_FILE==mpvEvent){
-            pState=STATE_ENDED
-        }
-        if (pState!=STATE_READY){
-            return State.Builder()
-                .setAvailableCommands(permanentAvailableCommands)
-                .build()
-        }
-
-        val isBuffering = MPVLib.getPropertyBoolean("paused-for-cache")?:false
-        if (isBuffering) {
-            pState=STATE_BUFFERING
-        }
 
         val duration = MPVLib.getPropertyInt("duration/full")?:0
 
@@ -222,17 +207,40 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
             .build()
         val listMediaItemData = arrayListOf(mediaItemData)
 
+        var pNewlyRenderedFirstFrame=false
+        if (MPVLib.MPV_EVENT_START_FILE==mpvEvent){
+            playerState=STATE_BUFFERING
+        }else if (MPVLib.MPV_EVENT_FILE_LOADED==mpvEvent){
+            playerState=STATE_READY
+            pNewlyRenderedFirstFrame=true
+        }else if (MPVLib.MPV_EVENT_SEEK==mpvEvent){
+            playerState=STATE_BUFFERING
+        }else if (MPVLib.MPV_EVENT_PLAYBACK_RESTART==mpvEvent){
+            playerState=STATE_READY
+        } else if (MPVLib.MPV_EVENT_END_FILE==mpvEvent){
+            playerState=STATE_ENDED
+        } else if (MPV_EVENT_START_PAUSED_FOR_CACHE_START==mpvEvent){
+            playerState=STATE_BUFFERING
+        }else if (MPV_EVENT_START_PAUSED_FOR_CACHE_END==mpvEvent){
+            playerState=STATE_READY
+        }
+
+        mpvEvent= MPVLib.MPV_EVENT_NONE
+
         val builder = State.Builder()
             .setPlaylist(listMediaItemData)
             .setAvailableCommands(permanentAvailableCommands)
             .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
-            .setPlaybackState(pState)
+            .setPlaybackState(playerState)
+            .setNewlyRenderedFirstFrame(pNewlyRenderedFirstFrame)
             .setPlaybackSuppressionReason(PLAYBACK_SUPPRESSION_REASON_NONE)
             .setContentPositionMs {
                 (MPVLib.getPropertyInt("time-pos/full")?:0)*1000.toLong()
             }
             .setPlaybackParameters(PlaybackParameters((MPVLib.getPropertyDouble("speed")?:0).toFloat()))
-            .setNewlyRenderedFirstFrame(pNewlyRenderedFirstFrame)
+
+
+
         return builder.build()
     }
 
@@ -279,13 +287,6 @@ class MPVPlayer private constructor(looper: Looper, private val context: Applica
     override fun handleSetTrackSelectionParameters(trackSelectionParameters: TrackSelectionParameters): ListenableFuture<*> {
         return Futures.immediateFuture(null)
     }
-
-    override fun handleRelease(): ListenableFuture<*> {
-        //todo
-        return Futures.immediateFuture(null)
-    }
-
-
 
 
     override fun handleSetMediaItems(
