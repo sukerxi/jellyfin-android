@@ -259,7 +259,7 @@ class QueueManager(
      * @return A [MediaSource]. The type of MediaSource depends on the playback method/protocol.
      */
     @CheckResult
-    private fun createVideoMediaSource(source: JellyfinMediaSource): MediaSource {
+    fun createVideoMediaSource(source: JellyfinMediaSource): MediaSource {
         val (url, factory) = generateMediaSourceBaseInfo( source)
         val mediaItem = MediaItem.Builder()
             .setMediaId(source.itemId.toString())
@@ -344,7 +344,7 @@ class QueueManager(
      * @return The parsed MediaSources for the subtitles.
      */
     @CheckResult
-    private fun createExternalSubtitleMediaSources(
+    fun createExternalSubtitleMediaSources(
         source: JellyfinMediaSource,
     ): Array<MediaSource> {
         val factory = get<SingleSampleMediaSource.Factory>()

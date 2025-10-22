@@ -29,7 +29,6 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.util.EventLogger
-import dev.jdtech.mpv.MPVLib
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -89,7 +88,6 @@ import org.jellyfin.sdk.model.api.PlaybackStopInfo
 import org.jellyfin.sdk.model.api.RepeatMode
 import org.jellyfin.sdk.model.extensions.inWholeTicks
 import org.jellyfin.sdk.model.extensions.ticks
-import org.koin.android.ext.android.inject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -275,7 +273,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 }
             }
             VideoPlayerType.MPV_PLAYER -> {
-                _player.value =MPVPlayer.getInstance(application).apply {
+                _player.value =MPVPlayer(application,Looper.getMainLooper()).apply {
                     setAnalyticsCollector(analyticsCollector)
                     addListener(this@PlayerViewModel)
                     setProperty("hwdec",if (_decoderType.value==null||_decoderType.value==DecoderType.HARDWARE) "auto" else "no" )
@@ -286,8 +284,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 throw IllegalArgumentException("Invalid video player type")
             }
         }
-
-
     }
 
     /**
@@ -309,7 +305,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         if (player is ExoPlayer){
             player.setMediaSource(exoMediaSource)
         }else if (player is MPVPlayer){
+            val mainMediaSource = queueManager.createVideoMediaSource(jellyfinMediaSource)
+            val externalSubtitleMediaSources = queueManager.createExternalSubtitleMediaSources(jellyfinMediaSource)
             player.setMediaItem(queueManager.createVideoMediaItem(jellyfinMediaSource))
+            player.setMediaSource(jellyfinMediaSource,mainMediaSource,externalSubtitleMediaSources)
         }
 
         player.prepare()
