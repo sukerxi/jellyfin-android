@@ -25,7 +25,7 @@ class MpvCore private constructor(context: Application) {
                 mainHandler.post {
                     currentEvent =if (value) MPV_EVENT_PAUSED_FOR_CACHE_START
                     else  MPV_EVENT_PAUSED_FOR_CACHE_END
-                    for (consumer in consumerList) {
+                    for (consumer in propertyListeners) {
                         consumer.accept(property, value)
                     }
                     currentEvent= MPV_EVENT_NONE
@@ -37,8 +37,8 @@ class MpvCore private constructor(context: Application) {
             if (eventsNeedListen.contains(eventId)) {
                 mainHandler.post {
                     currentEvent=eventId
-                    for (consumer in consumerList) {
-                        consumer.accept("", "")
+                    for (consumer in eventListeners) {
+                        consumer.accept(eventId, "")
                     }
                     currentEvent= MPV_EVENT_NONE
                 }
@@ -59,7 +59,8 @@ class MpvCore private constructor(context: Application) {
 
 
     companion object {
-        private val consumerList: ArrayList<BiConsumer<String, Any>> = arrayListOf()
+        private val propertyListeners: ArrayList<BiConsumer<String, Any>> = arrayListOf()
+        private val eventListeners: ArrayList<BiConsumer<Int, Any>> = arrayListOf()
         var currentEvent: Int = MPV_EVENT_NONE
             private set
         const val MPV_EVENT_PAUSED_FOR_CACHE_START =1000
@@ -105,11 +106,13 @@ class MpvCore private constructor(context: Application) {
                 else -> throw IllegalArgumentException("Unsupported property type: ${value::class}")
             }
         }
-        fun subscribe(consumer: BiConsumer<String,Any>) {
-            consumerList.add(consumer)
+        fun subscribe(propertyListener: BiConsumer<String,Any>,eventListener:BiConsumer<Int, Any>) {
+            propertyListeners.add(propertyListener)
+            eventListeners.add(eventListener)
         }
-        fun unsubscribe(consumer: BiConsumer<String,Any>) {
-            consumerList.remove(consumer)
+        fun unsubscribe(propertyListener: BiConsumer<String,Any>,eventListener:BiConsumer<Int, Any>) {
+            propertyListeners.remove(propertyListener)
+            eventListeners.remove(eventListener)
         }
         fun attachSurface(surface: Surface) {
             MPVLib.attachSurface(surface)

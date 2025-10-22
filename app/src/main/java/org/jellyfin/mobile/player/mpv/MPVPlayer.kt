@@ -26,14 +26,23 @@ import java.util.function.BiConsumer
  * @author dr
  */
 class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(looper) {
+    private var startingFlag= false
     private var playerState: Int = STATE_IDLE
     private var mediaSource: JellyfinMediaSource? =null
-    private val biConsumer= BiConsumer<String, Any> { _, _ ->
+    private val propertyListener= BiConsumer<String, Any> { _, _ ->
+        invalidateState()
+    }
+    private val eventListener= BiConsumer<Int, Any> { eventId, _ ->
+        if (eventId== MpvCore.MPV_EVENT_END_FILE&&startingFlag){
+            return@BiConsumer
+        }else if(eventId== MpvCore.MPV_EVENT_START_FILE){
+            startingFlag=false
+        }
         invalidateState()
     }
     init {
         MpvCore.initialize(application)
-        MpvCore.subscribe(biConsumer)
+        MpvCore.subscribe(propertyListener,eventListener)
     }
 
     val surfaceHolderCallback = object : SurfaceHolder.Callback {
@@ -190,6 +199,7 @@ class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         val mediaItem = mediaItems[0]
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
+        startingFlag=true
         MpvCore.command(arrayOf("loadfile", uri.toString()))
 //        val file = File(context.filesDir, "sample-20s.mp4")
 //        val file = File(context.filesDir, "sample.mp4") duangxiao
@@ -200,7 +210,7 @@ class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
 
 
     override fun handleRelease(): ListenableFuture<*> {
-        MpvCore.unsubscribe(biConsumer)
+        MpvCore.unsubscribe(propertyListener,eventListener)
         MpvCore.command(arrayOf("stop"))
         return Futures.immediateFuture(null)
     }
