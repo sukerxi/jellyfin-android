@@ -5,10 +5,16 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
+import androidx.media3.common.Tracks
 
 import dev.jdtech.mpv.MPVLib
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
+import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NODE
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
+import dev.jdtech.mpv.MPVLib.MPV_FORMAT_STRING
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.function.BiConsumer
 
@@ -18,7 +24,17 @@ import java.util.function.BiConsumer
 class MpvCore private constructor(context: Application) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mpvLibEventObserver = object : MPVLib.EventObserver {
-        override fun eventProperty(property: String) {}
+        override fun eventProperty(property: String) {
+            if(property=="track-list"){
+                mainHandler.post {
+                    currentEvent = MPV_EVENT_TRACK_LIST_CHANGE
+                    for (consumer in eventListeners) {
+                        consumer.accept(currentEvent, "")
+                    }
+                    currentEvent= MPV_EVENT_NONE
+                }
+            }
+        }
         override fun eventProperty(property: String, value: Long) {}
         override fun eventProperty(property: String, value: Double) {}
         override fun eventProperty(property: String, value: Boolean) {
@@ -26,8 +42,8 @@ class MpvCore private constructor(context: Application) {
                 mainHandler.post {
                     currentEvent =if (value) MPV_EVENT_PAUSED_FOR_CACHE_START
                     else  MPV_EVENT_PAUSED_FOR_CACHE_END
-                    for (consumer in propertyListeners) {
-                        consumer.accept(property, value)
+                    for (consumer in eventListeners) {
+                        consumer.accept(currentEvent, value)
                     }
                     currentEvent= MPV_EVENT_NONE
                 }
@@ -35,37 +51,26 @@ class MpvCore private constructor(context: Application) {
         }
         override fun eventProperty(property: String, value: String) {}
         override fun event(eventId: Int) {
-            if (eventsNeedListen.contains(eventId)) {
-                mainHandler.post {
-                    currentEvent=eventId
-                    for (consumer in eventListeners) {
-                        consumer.accept(eventId, "")
-                    }
-                    currentEvent= MPV_EVENT_NONE
+            mainHandler.post {
+                currentEvent=eventId
+                for (consumer in eventListeners) {
+                    consumer.accept(eventId, "")
                 }
+                currentEvent= MPV_EVENT_NONE
             }
         }
     }
 
 
-    private val eventsNeedListen=arrayOf(
-        MPV_EVENT_START_FILE,
-        MPV_EVENT_FILE_LOADED,
-        MPV_EVENT_END_FILE,
-        MPV_EVENT_PLAYBACK_RESTART,
-        MPV_EVENT_SEEK,
-        MPV_EVENT_PAUSED_FOR_CACHE_START,
-        MPV_EVENT_PAUSED_FOR_CACHE_END
-    )
-
 
     companion object {
-        private val propertyListeners: CopyOnWriteArrayList<BiConsumer<String, Any>> = CopyOnWriteArrayList()
+        private val json = Json { ignoreUnknownKeys = true }
         private val eventListeners: CopyOnWriteArrayList<BiConsumer<Int, Any>> = CopyOnWriteArrayList()
         var currentEvent: Int = MPV_EVENT_NONE
             private set
         const val MPV_EVENT_PAUSED_FOR_CACHE_START =1000
         const val MPV_EVENT_PAUSED_FOR_CACHE_END =1001
+        const val MPV_EVENT_TRACK_LIST_CHANGE =1002
         const val MPV_EVENT_START_FILE =MPVLib.MPV_EVENT_START_FILE
         const val MPV_EVENT_FILE_LOADED =MPVLib.MPV_EVENT_FILE_LOADED
         const val MPV_EVENT_END_FILE = MPVLib.MPV_EVENT_END_FILE
@@ -107,12 +112,10 @@ class MpvCore private constructor(context: Application) {
                 else -> throw IllegalArgumentException("Unsupported property type: ${value::class}")
             }
         }
-        fun subscribe(propertyListener: BiConsumer<String,Any>,eventListener:BiConsumer<Int, Any>) {
-            propertyListeners.add(propertyListener)
+        fun subscribe(eventListener:BiConsumer<Int, Any>) {
             eventListeners.add(eventListener)
         }
-        fun unsubscribe(propertyListener: BiConsumer<String,Any>,eventListener:BiConsumer<Int, Any>) {
-            propertyListeners.remove(propertyListener)
+        fun unsubscribe(eventListener:BiConsumer<Int, Any>) {
             eventListeners.remove(eventListener)
         }
         fun attachSurface(surface: Surface) {
@@ -120,6 +123,13 @@ class MpvCore private constructor(context: Application) {
         }
         fun detachSurface() {
             MPVLib.detachSurface()
+        }
+
+        fun getTracks(): List<MediaTrack> {
+            println(getProperty<String>("track-list"))
+            return getProperty<String>("track-list")?.let { tracks ->
+                json.decodeFromString(tracks)
+            }?: emptyList()
         }
 
     }
@@ -161,7 +171,7 @@ class MpvCore private constructor(context: Application) {
             // Property("pause", MPV_FORMAT_FLAG),
             Property("paused-for-cache", MPV_FORMAT_FLAG),
             // Property("speed", MPV_FORMAT_STRING),
-            // Property("track-list"),
+            Property("track-list"),
             // Property("video-params/aspect", MPV_FORMAT_DOUBLE),
             // Property("video-params/rotate", MPV_FORMAT_DOUBLE),
             // Property("playlist-pos", MPV_FORMAT_INT64),
@@ -179,7 +189,84 @@ class MpvCore private constructor(context: Application) {
         for ((name, format) in p)
             MPVLib.observeProperty(name, format)
     }
+    @Serializable
+    data class MediaTrack(
+        @SerialName("id") val id: Long = -1L,
+        @SerialName("type") val type: String = "",
+        @SerialName("src-id") val srcId: Long = -1L,
+        @SerialName("title") val title: String = "",
+        @SerialName("lang") val lang: String = "",
+        @SerialName("image") val image: Boolean = false,
+        @SerialName("albumart") val albumart: Boolean = false,
+        @SerialName("default") val isDefault: Boolean = false,
+        @SerialName("forced") val forced: Boolean = false,
+        @SerialName("dependent") val dependent: Boolean = false,
+        @SerialName("visual-impaired") val visualImpaired: Boolean = false,
+        @SerialName("hearing-impaired") val hearingImpaired: Boolean = false,
+        @SerialName("hls-bitrate") val hlsBitrate: Long = 0L,
+        @SerialName("program-id") val programId: Long = -1L,
+        @SerialName("selected") val selected: Boolean = false,
+        @SerialName("main-selection") val mainSelection: Long = -1L,
+        @SerialName("external") val external: Boolean = false,
+        @SerialName("external-filename") val externalFilename: String = "",
+        @SerialName("codec") val codec: String = "",
+        @SerialName("codec-desc") val codecDesc: String = "",
+        @SerialName("codec-profile") val codecProfile: String = "",
+        @SerialName("ff-index") val ffIndex: Long = -1L,
+        @SerialName("decoder") val decoder: String = "",
+        @SerialName("decoder-desc") val decoderDesc: String = "",
+        @SerialName("demux-w") val demuxW: Long = 0L,
+        @SerialName("demux-h") val demuxH: Long = 0L,
+        @SerialName("demux-crop-x") val demuxCropX: Long = 0L,
+        @SerialName("demux-crop-y") val demuxCropY: Long = 0L,
+        @SerialName("demux-crop-w") val demuxCropW: Long = 0L,
+        @SerialName("demux-crop-h") val demuxCropH: Long = 0L,
+        @SerialName("demux-channel-count") val demuxChannelCount: Long = 0L,
+        @SerialName("demux-channels") val demuxChannels: String = "",
+        @SerialName("demux-samplerate") val demuxSamplerate: Long = 0L,
+        @SerialName("demux-fps") val demuxFps: Double = 0.0,
+        @SerialName("demux-bitrate") val demuxBitrate: Long = 0L,
+        @SerialName("demux-rotation") val demuxRotation: Long = 0L,
+        @SerialName("demux-par") val demuxPar: Double = 0.0,
+        @SerialName("format-name") val formatName: String = "",
+        @SerialName("audio-channels") val audioChannels: Long = 0L,
+        @SerialName("replaygain-track-peak") val replaygainTrackPeak: Double = 0.0,
+        @SerialName("replaygain-track-gain") val replaygainTrackGain: Double = 0.0,
+        @SerialName("replaygain-album-peak") val replaygainAlbumPeak: Double = 0.0,
+        @SerialName("replaygain-album-gain") val replaygainAlbumGain: Double = 0.0,
+        @SerialName("dolby-vision-profile") val dolbyVisionProfile: Long = 0L,
+        @SerialName("dolby-vision-level") val dolbyVisionLevel: Long = 0L,
+    ){
+        fun getTrackType(): TrackType? = when (type.lowercase()) {
+            "sub" -> TrackType.SUBTITLE
+            "subtitle" -> TrackType.SUBTITLE
+            "audio" -> TrackType.AUDIO
+            "video" -> TrackType.VIDEO
+            else -> null
+        }
+    }
+
+    enum class TrackType {
+        SUBTITLE, AUDIO, VIDEO
+    }
 
 
+    class MediaTrackManager(private val tracks: List<MediaTrack>) {
 
+        // 获取当前选中的各类型轨道
+        fun getSelectedTracks(): Map<TrackType, MediaTrack> {
+            val selectedTracks = mutableMapOf<TrackType, MediaTrack>()
+            for (track in tracks) {
+                if (track.selected == true) { // 假设selected字段表示是否被选中
+                    track.getTrackType()?.let { selectedTracks[it] = track }
+                }
+            }
+            return selectedTracks
+        }
+
+        // 获取给定类型的所有轨道
+        fun getAllTracksByType(trackType: TrackType): List<MediaTrack> {
+            return tracks.filter { it.getTrackType() == trackType }
+        }
+    }
 }

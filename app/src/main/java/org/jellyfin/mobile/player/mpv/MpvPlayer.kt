@@ -14,13 +14,22 @@ import androidx.media3.common.util.Assertions
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.analytics.AnalyticsCollector
-import androidx.media3.exoplayer.source.MediaSource
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import org.jellyfin.mobile.player.source.JellyfinMediaSource
-
+import kotlinx.serialization.json.Json
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_END_FILE
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_FILE_LOADED
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PAUSED_FOR_CACHE_END
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PAUSED_FOR_CACHE_START
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PLAYBACK_RESTART
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_SEEK
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_START_FILE
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_TRACK_LIST_CHANGE
+import org.jellyfin.mobile.player.mpv.MpvCore.Companion.getProperty
+import org.jellyfin.mobile.player.mpv.MpvCore.MediaTrack
 import java.util.UUID
 import java.util.function.BiConsumer
+
 
 /**
  * @author dr
@@ -28,20 +37,36 @@ import java.util.function.BiConsumer
 class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(looper) {
     private var startingFlag= false
     private var playerState: Int = STATE_IDLE
-    private val propertyListener= BiConsumer<String, Any> { _, _ ->
-        invalidateState()
-    }
-    private val eventListener= BiConsumer<Int, Any> { eventId, _ ->
-        if (eventId== MpvCore.MPV_EVENT_END_FILE&&startingFlag){
-            return@BiConsumer
-        }else if(eventId== MpvCore.MPV_EVENT_START_FILE){
-            startingFlag=false
+
+    private var tracks: List<MediaTrack> = emptyList()
+    private val eventsNeedListen=arrayOf(
+        MPV_EVENT_START_FILE,
+        MPV_EVENT_FILE_LOADED,
+        MPV_EVENT_END_FILE,
+        MPV_EVENT_PLAYBACK_RESTART,
+        MPV_EVENT_SEEK,
+        MPV_EVENT_PAUSED_FOR_CACHE_START,
+        MPV_EVENT_PAUSED_FOR_CACHE_END,
+        MPV_EVENT_TRACK_LIST_CHANGE,
+    )
+
+
+    private val eventListener= BiConsumer<Int, Any> {eventId, value ->
+        if (eventsNeedListen.contains(eventId)) {
+            if (eventId== MPV_EVENT_END_FILE&&startingFlag){
+                return@BiConsumer
+            }else if(eventId== MPV_EVENT_START_FILE){
+                startingFlag=false
+            }else if(eventId== MPV_EVENT_TRACK_LIST_CHANGE){
+                tracks = MpvCore.getTracks()
+                return@BiConsumer
+            }
+            invalidateState()
         }
-        invalidateState()
     }
     init {
         MpvCore.initialize(application)
-        MpvCore.subscribe(propertyListener,eventListener)
+        MpvCore.subscribe(eventListener)
     }
 
     val surfaceHolderCallback = object : SurfaceHolder.Callback {
@@ -96,32 +121,29 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     override fun getState(): State {
         // println("ddd-${MpvCore.getProperty<String>("track-list")}")
         val duration = MpvCore.getProperty<Int>("duration/full")?:0
-        // val position = MpvCore.getProperty<Int>("time-pos/full")?:0
         val pause = MpvCore.getProperty<Boolean>("pause")?:true
         val durationUs = Util.msToUs(duration*1000.toLong())
-        // val positionUs = Util.msToUs(position*1000.toLong())
         val mediaItemData = MediaItemData.Builder(UUID.randomUUID())
-            // .setDefaultPositionUs(positionUs)
             .setDurationUs(durationUs)
             .setIsSeekable(true)
             .build()
         val listMediaItemData = arrayListOf(mediaItemData)
 
         var localNewlyRenderedFirstFrame=false
-        if (MpvCore.MPV_EVENT_START_FILE== MpvCore.currentEvent){
+        if (MPV_EVENT_START_FILE== MpvCore.currentEvent){
             playerState=STATE_BUFFERING
-        }else if (MpvCore.MPV_EVENT_FILE_LOADED==MpvCore.currentEvent){
+        }else if (MPV_EVENT_FILE_LOADED==MpvCore.currentEvent){
             playerState=STATE_READY
             localNewlyRenderedFirstFrame=true
-        }else if (MpvCore.MPV_EVENT_SEEK==MpvCore.currentEvent){
+        }else if (MPV_EVENT_SEEK==MpvCore.currentEvent){
             playerState=STATE_BUFFERING
-        }else if (MpvCore.MPV_EVENT_PLAYBACK_RESTART==MpvCore.currentEvent){
+        }else if (MPV_EVENT_PLAYBACK_RESTART==MpvCore.currentEvent){
             playerState=STATE_READY
-        } else if (MpvCore.MPV_EVENT_END_FILE==MpvCore.currentEvent){
+        } else if (MPV_EVENT_END_FILE==MpvCore.currentEvent){
             playerState=STATE_ENDED
-        } else if (MpvCore.MPV_EVENT_PAUSED_FOR_CACHE_START==MpvCore.currentEvent){
+        } else if (MPV_EVENT_PAUSED_FOR_CACHE_START==MpvCore.currentEvent){
             playerState=STATE_BUFFERING
-        }else if (MpvCore.MPV_EVENT_PAUSED_FOR_CACHE_END==MpvCore.currentEvent){
+        }else if (MPV_EVENT_PAUSED_FOR_CACHE_END==MpvCore.currentEvent){
             playerState=STATE_READY
         }
 
@@ -182,6 +204,29 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     }
 
     override fun handleSetTrackSelectionParameters(trackSelectionParameters: TrackSelectionParameters): ListenableFuture<*> {
+
+        //        player.setTrackSelectionParameters(
+        //            player.getTrackSelectionParameters()
+        //                .buildUpon()
+        //                .setMaxVideoSizeSd()
+        //                .build())
+        this.trackSelectionParameters=trackSelectionParameters
+        // 构建新的参数，指定音频轨道
+
+        // 假设 player 是 ExoPlayer 实例（实现了 Player 接口）
+        // val currentParams: TrackSelectionParameters = player.getTrackSelectionParameters()
+        //
+        //
+        // // 构建新的参数，指定音频轨道
+        // val newParams = currentParams.buildUpon()
+        //     .setOverrideForType(
+        //         TrackSelectionOverride(
+        //             MediaTrackGroup(),  /* 选中该 group 中的第几个轨道，比如 1 表示第二个 */
+        //             ImmutableList.of<E?>(1),
+        //         ),
+        //     )
+        //     .build()
+
         return Futures.immediateFuture(null)
     }
 
@@ -207,7 +252,7 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
 
 
     override fun handleRelease(): ListenableFuture<*> {
-        MpvCore.unsubscribe(propertyListener,eventListener)
+        MpvCore.unsubscribe(eventListener)
         MpvCore.command(arrayOf("stop"))
         return Futures.immediateFuture(null)
     }
@@ -246,5 +291,14 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     fun setProperty(name: String, value: Any ){
         MpvCore.setProperty(name, value)
     }
+
+    fun setSubTrack(id:Int){
+        MpvCore.setProperty("sid",id)
+    }
+    fun setAudioTrack(id:Int){
+        MpvCore.setProperty("aid",id)
+
+    }
+
 
 }
