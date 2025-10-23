@@ -45,7 +45,7 @@ import org.jellyfin.mobile.player.interaction.PlayerMediaSessionCallback
 import org.jellyfin.mobile.player.interaction.PlayerNotificationHelper
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
-import org.jellyfin.mobile.player.mpv.MPVPlayer
+import org.jellyfin.mobile.player.mpv.MpvPlayer
 import org.jellyfin.mobile.player.queue.QueueManager
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
@@ -273,7 +273,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 }
             }
             VideoPlayerType.MPV_PLAYER -> {
-                _player.value =MPVPlayer(application,Looper.getMainLooper()).apply {
+                _player.value =MpvPlayer(application,Looper.getMainLooper()).apply {
                     setAnalyticsCollector(analyticsCollector)
                     addListener(this@PlayerViewModel)
                     setProperty("hwdec",if (_decoderType.value==null||_decoderType.value==DecoderType.HARDWARE) "auto" else "no" )
@@ -304,7 +304,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         val player = playerOrNull ?: return
         if (player is ExoPlayer){
             player.setMediaSource(exoMediaSource)
-        }else if (player is MPVPlayer){
+        }else if (player is MpvPlayer){
             val mainMediaSource = queueManager.createVideoMediaSource(jellyfinMediaSource)
             val externalSubtitleMediaSources = queueManager.createExternalSubtitleMediaSources(jellyfinMediaSource)
             player.setMediaItem(queueManager.createVideoMediaItem(jellyfinMediaSource))

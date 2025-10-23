@@ -25,7 +25,7 @@ import java.util.function.BiConsumer
 /**
  * @author dr
  */
-class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(looper) {
+class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(looper) {
     private var startingFlag= false
     private var playerState: Int = STATE_IDLE
     private var mediaSource: JellyfinMediaSource? =null
@@ -47,9 +47,9 @@ class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
 
     val surfaceHolderCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
-            MpvCore.setProperty("vo", "gpu_next,gpu")
+            MpvCore.setOptions("vo", "gpu_next,gpu")
+            MpvCore.setOptions("force-window", "yes")
             MpvCore.attachSurface(holder.surface)
-            MpvCore.setProperty("force-window", "yes")
         }
         override fun surfaceChanged(
             holder: SurfaceHolder,
@@ -60,9 +60,9 @@ class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
             MpvCore.setProperty("android-surface-size", "${width}x${height}")
         }
         override fun surfaceDestroyed(holder: SurfaceHolder) {
-            MpvCore.setProperty("vo", "null")
-            MpvCore.setProperty("force-window", "no")
             MpvCore.detachSurface()
+            MpvCore.setOptions("vo", "null")
+            MpvCore.setOptions("force-window", "no")
         }
     }
     private val permanentAvailableCommands =
@@ -110,12 +110,12 @@ class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
             .build()
         val listMediaItemData = arrayListOf(mediaItemData)
 
-        var pNewlyRenderedFirstFrame=false
+        var localNewlyRenderedFirstFrame=false
         if (MpvCore.MPV_EVENT_START_FILE== MpvCore.currentEvent){
             playerState=STATE_BUFFERING
         }else if (MpvCore.MPV_EVENT_FILE_LOADED==MpvCore.currentEvent){
             playerState=STATE_READY
-            pNewlyRenderedFirstFrame=true
+            localNewlyRenderedFirstFrame=true
         }else if (MpvCore.MPV_EVENT_SEEK==MpvCore.currentEvent){
             playerState=STATE_BUFFERING
         }else if (MpvCore.MPV_EVENT_PLAYBACK_RESTART==MpvCore.currentEvent){
@@ -134,7 +134,7 @@ class MPVPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
             .setAvailableCommands(permanentAvailableCommands)
             .setPlayWhenReady(!pause,PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaybackState(playerState)
-            .setNewlyRenderedFirstFrame(pNewlyRenderedFirstFrame)
+            .setNewlyRenderedFirstFrame(localNewlyRenderedFirstFrame)
             .setPlaybackSuppressionReason(PLAYBACK_SUPPRESSION_REASON_NONE)
             .setContentPositionMs {
                 (MpvCore.getProperty<Long>("time-pos/full")?:0)*1000
