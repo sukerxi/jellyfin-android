@@ -46,6 +46,7 @@ import org.jellyfin.mobile.player.interaction.PlayerNotificationHelper
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentAction
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
 import org.jellyfin.mobile.player.mpv.MpvPlayer
+import org.jellyfin.mobile.player.mpv.MpvUtil
 import org.jellyfin.mobile.player.queue.QueueManager
 import org.jellyfin.mobile.player.source.JellyfinMediaSource
 import org.jellyfin.mobile.player.source.RemoteJellyfinMediaSource
@@ -301,21 +302,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     }
 
     fun load(jellyfinMediaSource: JellyfinMediaSource, exoMediaSource: MediaSource, playWhenReady: Boolean) {
+        val startTime = jellyfinMediaSource.startTime
         val player = playerOrNull ?: return
         if (player is ExoPlayer){
             player.setMediaSource(exoMediaSource)
         }else if (player is MpvPlayer){
-            val mainMediaSource = queueManager.createVideoMediaSource(jellyfinMediaSource)
-            val externalSubtitleMediaSources = queueManager.createExternalSubtitleMediaSources(jellyfinMediaSource)
-            player.setMediaItem(queueManager.createVideoMediaItem(jellyfinMediaSource))
-            player.setMediaSource(jellyfinMediaSource,mainMediaSource,externalSubtitleMediaSources)
+            player.setMediaItem(MpvUtil.convertJellyfinMediaSource(jellyfinMediaSource),startTime.inWholeMilliseconds)
         }
 
         player.prepare()
 
         initialTracksSelected.set(false)
-
-        val startTime = jellyfinMediaSource.startTime
         if (startTime > Duration.ZERO) player.seekTo(startTime.inWholeMilliseconds)
 
         applyMediaSegments(jellyfinMediaSource)

@@ -9,6 +9,7 @@ import android.view.Surface
 import dev.jdtech.mpv.MPVLib
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.function.BiConsumer
 
 /**
@@ -59,8 +60,8 @@ class MpvCore private constructor(context: Application) {
 
 
     companion object {
-        private val propertyListeners: ArrayList<BiConsumer<String, Any>> = arrayListOf()
-        private val eventListeners: ArrayList<BiConsumer<Int, Any>> = arrayListOf()
+        private val propertyListeners: CopyOnWriteArrayList<BiConsumer<String, Any>> = CopyOnWriteArrayList()
+        private val eventListeners: CopyOnWriteArrayList<BiConsumer<Int, Any>> = CopyOnWriteArrayList()
         var currentEvent: Int = MPV_EVENT_NONE
             private set
         const val MPV_EVENT_PAUSED_FOR_CACHE_START =1000

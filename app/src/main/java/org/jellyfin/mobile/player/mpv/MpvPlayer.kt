@@ -28,7 +28,6 @@ import java.util.function.BiConsumer
 class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(looper) {
     private var startingFlag= false
     private var playerState: Int = STATE_IDLE
-    private var mediaSource: JellyfinMediaSource? =null
     private val propertyListener= BiConsumer<String, Any> { _, _ ->
         invalidateState()
     }
@@ -95,16 +94,14 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
             .build()
 
     override fun getState(): State {
-
-
+        // println("ddd-${MpvCore.getProperty<String>("track-list")}")
         val duration = MpvCore.getProperty<Int>("duration/full")?:0
-        val position = MpvCore.getProperty<Int>("time-pos/full")?:0
+        // val position = MpvCore.getProperty<Int>("time-pos/full")?:0
         val pause = MpvCore.getProperty<Boolean>("pause")?:true
-
         val durationUs = Util.msToUs(duration*1000.toLong())
-        val positionUs = Util.msToUs(position*1000.toLong())
+        // val positionUs = Util.msToUs(position*1000.toLong())
         val mediaItemData = MediaItemData.Builder(UUID.randomUUID())
-            .setDefaultPositionUs(positionUs)
+            // .setDefaultPositionUs(positionUs)
             .setDurationUs(durationUs)
             .setIsSeekable(true)
             .build()
@@ -140,8 +137,6 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
                 (MpvCore.getProperty<Long>("time-pos/full")?:0)*1000
             }
             .setPlaybackParameters(PlaybackParameters((MpvCore.getProperty<Float>("speed"))?:0f))
-
-
 
         return builder.build()
     }
@@ -200,6 +195,8 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
         startingFlag=true
+
+        MpvCore.setOptions("start","+${(startPositionMs/1000)}")
         MpvCore.command(arrayOf("loadfile", uri.toString()))
 //        val file = File(context.filesDir, "sample-20s.mp4")
 //        val file = File(context.filesDir, "sample.mp4") duangxiao
@@ -239,12 +236,6 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         return Futures.immediateFuture(null)
     }
 
-    fun setMediaSource(mediaSource: JellyfinMediaSource?,
-                       mainMediaSource: MediaSource,
-                       externalSubtitleMediaSources: Array<MediaSource>){
-        // Util.
-        // MpvCore.command(arrayOf("loadfile", uri.toString()))
-    }
 
     @UnstableApi
     fun setAnalyticsCollector(analyticsCollector: AnalyticsCollector?) {
