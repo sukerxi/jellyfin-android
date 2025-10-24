@@ -25,6 +25,7 @@ import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_SEEK
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_START_FILE
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_TRACK_LIST_CHANGE
 import org.jellyfin.mobile.player.mpv.MpvCore.MediaTrack
+import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
 import java.util.UUID
 import java.util.function.BiConsumer
 
@@ -35,11 +36,12 @@ import java.util.function.BiConsumer
 class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(looper) {
     private var startingFlag= false
     private var playerState: Int = STATE_IDLE
-
+    private var subConfigs: List<MediaItem.SubtitleConfiguration> =  listOf()
     private var tracks: List<MediaTrack> = emptyList()
     // private var videoTracks: List<MediaTrack> = emptyList()
     // private var audioTracks: List<MediaTrack> = emptyList()
     // private var subtitleTracks: List<MediaTrack> = emptyList()
+    private var externalSubtitleTracks: List<MediaTrack> = emptyList()
 
     private val eventsNeedListen=arrayOf(
         MPV_EVENT_START_FILE,
@@ -64,11 +66,18 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
                 }
                 MPV_EVENT_TRACK_LIST_CHANGE -> {
                     tracks = MpvCore.getTracks()
-                    // val mediaTrackManager = MpvCore.MediaTrackManager(tracks)
+                    val mediaTrackManager = MpvCore.MediaTrackManager(tracks)
                     // videoTracks = mediaTrackManager.getTracksByType(MpvCore.TrackType.VIDEO)
                     // audioTracks = mediaTrackManager.getTracksByType(MpvCore.TrackType.AUDIO)
-                    // subtitleTracks = mediaTrackManager.getTracksByType(MpvCore.TrackType.SUBTITLE)
+                    externalSubtitleTracks=mediaTrackManager.getTracksByType(MpvCore.TrackType.SUBTITLE).filter {
+                        track -> track.external
+                    }.toList()
                     return@BiConsumer
+                }
+                MPV_EVENT_FILE_LOADED->{
+                    for (subConfig in subConfigs) {
+                        MpvCore.command(arrayOf("async","sub-add",subConfig.uri.toString()))
+                    }
                 }
             }
             invalidateState()
@@ -246,15 +255,12 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         startIndex: Int,
         startPositionMs: Long,
     ): ListenableFuture<*> {
+        startingFlag=true
         val mediaItem = mediaItems[0]
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
-        val subtitleConfigurations = localConfiguration.subtitleConfigurations
-        for (subConfig in subtitleConfigurations) {
-            MpvCore.setOptions("sub-file",subConfig.uri.toString())
-        }
-        startingFlag=true
-
+        subConfigs=localConfiguration.subtitleConfigurations
+        // MpvCore.setProperty("sub-files",subConfigs.map { it.uri }.joinToString(";"))
         MpvCore.setOptions("start","+${(startPositionMs/1000)}")
         MpvCore.command(arrayOf("loadfile", uri.toString()))
 //        val file = File(context.filesDir, "sample-20s.mp4")
@@ -308,10 +314,17 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     fun disableSubTrack(){
         MpvCore.setProperty("sid","no")
     }
-    fun setSubTrack(index:Int){
-        if (index in tracks.indices) {
-            MpvCore.setProperty("sid",tracks[index].id)
+    fun setSubTrack(index:Int,subtitleDeliveryMethod: SubtitleDeliveryMethod){
+        if (subtitleDeliveryMethod==SubtitleDeliveryMethod.EMBED){
+            if (index in tracks.indices) {
+                MpvCore.setProperty("sid",tracks[index].id)
+            }
+        }else if(subtitleDeliveryMethod==SubtitleDeliveryMethod.EXTERNAL){
+            if (index in externalSubtitleTracks.indices) {
+                MpvCore.setProperty("sid",externalSubtitleTracks[index].id)
+            }
         }
+
     }
 
     fun setAudioTrack(index:Int){

@@ -152,11 +152,12 @@ class TrackSelectionHelper(
                     return true
                 }
                 SubtitleDeliveryMethod.EMBED -> {
-                    player.setSubTrack(subtitleStream.index)
+                    val embeddedStreamIndex = mediaSource.getEmbeddedStreamIndex(subtitleStream)
+                    player.setSubTrack(embeddedStreamIndex,SubtitleDeliveryMethod.EMBED)
                     return true
                 }
                 SubtitleDeliveryMethod.EXTERNAL -> {
-                    player.setSubTrack(subtitleStream.index)
+                    player.setSubTrack(subtitleStream.index,SubtitleDeliveryMethod.EXTERNAL)
                     return true
                 }
                 else -> return false
