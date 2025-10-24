@@ -57,11 +57,19 @@ android {
 
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = releaseSigningConfig
+
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
         }
         getByName("debug") {
             applicationIdSuffix = ".debug"
             isDebuggable = true
             aaptOptions.cruncherEnabled = false
+
+            ndk {
+                abiFilters += listOf("x86_64", "arm64-v8a")
+            }
         }
     }
 
