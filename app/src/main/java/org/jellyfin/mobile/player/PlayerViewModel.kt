@@ -113,7 +113,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
     // Media source handling
     private val trackSelector = DefaultTrackSelector(getApplication())
-    val trackSelectionHelper = TrackSelectionHelper(this, trackSelector)
+    val trackSelectionHelper = TrackSelectionHelper(this, trackSelector,appPreferences)
     val queueManager = QueueManager(this)
     val mediaSourceOrNull: JellyfinMediaSource?
         get() = queueManager.getCurrentMediaSourceOrNull()

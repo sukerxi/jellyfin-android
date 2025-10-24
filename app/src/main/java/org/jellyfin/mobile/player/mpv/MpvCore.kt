@@ -5,13 +5,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
-import androidx.media3.common.Tracks
 
 import dev.jdtech.mpv.MPVLib
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
-import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NODE
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_NONE
-import dev.jdtech.mpv.MPVLib.MPV_FORMAT_STRING
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -126,7 +123,6 @@ class MpvCore private constructor(context: Application) {
         }
 
         fun getTracks(): List<MediaTrack> {
-            println(getProperty<String>("track-list"))
             return getProperty<String>("track-list")?.let { tracks ->
                 json.decodeFromString(tracks)
             }?: emptyList()
@@ -265,7 +261,7 @@ class MpvCore private constructor(context: Application) {
         }
 
         // 获取给定类型的所有轨道
-        fun getAllTracksByType(trackType: TrackType): List<MediaTrack> {
+        fun getTracksByType(trackType: TrackType): List<MediaTrack> {
             return tracks.filter { it.getTrackType() == trackType }
         }
     }

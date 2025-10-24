@@ -22,8 +22,8 @@ object MpvUtil : KoinComponent{
 
 
     fun convertJellyfinMediaSource(jellyfinMediaSource: JellyfinMediaSource)  : MediaItem {
-        val mediaItem = createVideoMediaItem(jellyfinMediaSource)
-        mediaItem.buildUpon().setSubtitleConfigurations(createExternalSubtitleConfiguration(jellyfinMediaSource))
+        val mediaItem=createVideoMediaItem(jellyfinMediaSource).buildUpon()
+            .setSubtitleConfigurations(createExternalSubtitleConfiguration(jellyfinMediaSource)).build()
         return mediaItem
     }
 
