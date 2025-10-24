@@ -1,9 +1,9 @@
-name: jellyfin-android build
+name: jellyfin-android release
 
 on:
   push:
     branches:
-      - main 
+      - master
 
 jobs:
   publish:
