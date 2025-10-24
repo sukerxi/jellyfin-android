@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
+import androidx.media3.common.util.Log
 
 import dev.jdtech.mpv.MPVLib
 import dev.jdtech.mpv.MPVLib.MPV_FORMAT_FLAG
@@ -123,7 +124,9 @@ class MpvCore private constructor(context: Application) {
         }
 
         fun getTracks(): List<MediaTrack> {
-            return getProperty<String>("track-list")?.let { tracks ->
+            val trackList = getProperty<String>("track-list")
+            trackList?.let { Log.d("MpvCore",it) }
+            return trackList?.let { tracks ->
                 json.decodeFromString(tracks)
             }?: emptyList()
         }
