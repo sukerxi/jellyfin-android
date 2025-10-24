@@ -16,7 +16,6 @@ import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.analytics.AnalyticsCollector
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import kotlinx.serialization.json.Json
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_END_FILE
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_FILE_LOADED
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PAUSED_FOR_CACHE_END
@@ -25,7 +24,6 @@ import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PLAYBACK_RESTA
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_SEEK
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_START_FILE
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_TRACK_LIST_CHANGE
-import org.jellyfin.mobile.player.mpv.MpvCore.Companion.getProperty
 import org.jellyfin.mobile.player.mpv.MpvCore.MediaTrack
 import java.util.UUID
 import java.util.function.BiConsumer
@@ -39,6 +37,10 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     private var playerState: Int = STATE_IDLE
 
     private var tracks: List<MediaTrack> = emptyList()
+    // private var videoTracks: List<MediaTrack> = emptyList()
+    // private var audioTracks: List<MediaTrack> = emptyList()
+    // private var subtitleTracks: List<MediaTrack> = emptyList()
+
     private val eventsNeedListen=arrayOf(
         MPV_EVENT_START_FILE,
         MPV_EVENT_FILE_LOADED,
@@ -53,13 +55,21 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
 
     private val eventListener= BiConsumer<Int, Any> {eventId, value ->
         if (eventsNeedListen.contains(eventId)) {
-            if (eventId== MPV_EVENT_END_FILE&&startingFlag){
-                return@BiConsumer
-            }else if(eventId== MPV_EVENT_START_FILE){
-                startingFlag=false
-            }else if(eventId== MPV_EVENT_TRACK_LIST_CHANGE){
-                tracks = MpvCore.getTracks()
-                return@BiConsumer
+            when (eventId) {
+                MPV_EVENT_END_FILE if startingFlag -> {
+                    return@BiConsumer
+                }
+                MPV_EVENT_START_FILE -> {
+                    startingFlag = false
+                }
+                MPV_EVENT_TRACK_LIST_CHANGE -> {
+                    tracks = MpvCore.getTracks()
+                    // val mediaTrackManager = MpvCore.MediaTrackManager(tracks)
+                    // videoTracks = mediaTrackManager.getTracksByType(MpvCore.TrackType.VIDEO)
+                    // audioTracks = mediaTrackManager.getTracksByType(MpvCore.TrackType.AUDIO)
+                    // subtitleTracks = mediaTrackManager.getTracksByType(MpvCore.TrackType.SUBTITLE)
+                    return@BiConsumer
+                }
             }
             invalidateState()
         }
@@ -239,6 +249,10 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         val mediaItem = mediaItems[0]
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
+        val subtitleConfigurations = localConfiguration.subtitleConfigurations
+        for (subConfig in subtitleConfigurations) {
+            MpvCore.setOptions("sub-file",subConfig.uri.toString())
+        }
         startingFlag=true
 
         MpvCore.setOptions("start","+${(startPositionMs/1000)}")
@@ -291,14 +305,18 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     fun setProperty(name: String, value: Any ){
         MpvCore.setProperty(name, value)
     }
-
-    fun setSubTrack(id:Int){
-        MpvCore.setProperty("sid",id)
+    fun disableSubTrack(){
+        MpvCore.setProperty("sid","no")
     }
-    fun setAudioTrack(id:Int){
-        MpvCore.setProperty("aid",id)
-
+    fun setSubTrack(index:Int){
+        if (index in tracks.indices) {
+            MpvCore.setProperty("sid",tracks[index].id)
+        }
     }
 
-
+    fun setAudioTrack(index:Int){
+        if (index in tracks.indices) {
+            MpvCore.setProperty("aid",tracks[index].id)
+        }
+    }
 }
