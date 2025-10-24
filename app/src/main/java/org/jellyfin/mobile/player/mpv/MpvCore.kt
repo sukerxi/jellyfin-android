@@ -123,7 +123,6 @@ class MpvCore private constructor(context: Application) {
         }
 
         fun getTracks(): List<MediaTrack> {
-            println(getProperty<String>("track-list"))
             return getProperty<String>("track-list")?.let { tracks ->
                 json.decodeFromString(tracks)
             }?: emptyList()

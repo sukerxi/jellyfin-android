@@ -138,7 +138,6 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
             .build()
 
     override fun getState(): State {
-        // println("ddd-${MpvCore.getProperty<String>("track-list")}")
         val duration = MpvCore.getProperty<Int>("duration/full")?:0
         val pause = MpvCore.getProperty<Boolean>("pause")?:true
         val durationUs = Util.msToUs(duration*1000.toLong())
