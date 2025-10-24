@@ -259,13 +259,8 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
         subConfigs=localConfiguration.subtitleConfigurations
-        // MpvCore.setProperty("sub-files",subConfigs.map { it.uri }.joinToString(";"))
         MpvCore.setOptions("start","+${(startPositionMs/1000)}")
         MpvCore.command(arrayOf("loadfile", uri.toString()))
-//        val file = File(context.filesDir, "sample-20s.mp4")
-//        val file = File(context.filesDir, "sample.mp4") duangxiao
-//        val file = File(context.filesDir, "458700_Finance_District_3840x2160.mp4") office
-//        MPVLib.command(arrayOf("loadfile","/data/user/0/org.jellyfin.mobile.debug/files/sample.mp4"))
         return Futures.immediateFuture(null)
     }
 
@@ -313,15 +308,16 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     fun disableSubTrack(){
         MpvCore.setProperty("sid","no")
     }
-    fun setSubTrack(index:Int,subtitleDeliveryMethod: SubtitleDeliveryMethod){
+    fun setSubTrack(index:Int, subtitleDeliveryMethod: SubtitleDeliveryMethod, deliveryUrl: String?){
         if (subtitleDeliveryMethod==SubtitleDeliveryMethod.EMBED){
             if (index in tracks.indices) {
-                MpvCore.setProperty("sid",tracks[index].id)
+                MpvCore.setProperty("sid", tracks[index].id)
             }
         }else if(subtitleDeliveryMethod==SubtitleDeliveryMethod.EXTERNAL){
-            if (index in externalSubtitleTracks.indices) {
-                MpvCore.setProperty("sid",externalSubtitleTracks[index].id)
-            }
+            externalSubtitleTracks.firstOrNull {
+                it.externalFilename == deliveryUrl
+            }?.also { track -> MpvCore.setProperty("sid",track.id)}
+
         }
 
     }
