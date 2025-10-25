@@ -136,7 +136,10 @@ class MpvCore private constructor(context: Application) {
 
 
     init {
+        val configDir = context.filesDir.path
         MPVLib.create(context)
+        MPVLib.setOptionString("config", "yes")
+        MPVLib.setOptionString("config-dir", configDir)
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("hwdec", "auto")
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")

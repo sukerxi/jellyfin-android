@@ -2,7 +2,6 @@ package org.jellyfin.mobile.player.mpv
 
 import android.app.Application
 import android.os.Looper
-import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.media3.common.AudioAttributes
@@ -24,11 +23,13 @@ import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PAUSED_FOR_CAC
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_PLAYBACK_RESTART
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_SEEK
 import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_START_FILE
-import org.jellyfin.mobile.player.mpv.MpvCore.Companion.MPV_EVENT_TRACK_LIST_CHANGE
 import org.jellyfin.mobile.player.mpv.MpvCore.MediaTrack
 import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
 import java.util.UUID
 import java.util.function.BiConsumer
+import java.util.function.IntFunction
+import java.util.stream.Collectors
+import java.util.stream.IntStream
 
 
 /**
@@ -42,8 +43,6 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     // private var videoTracks: List<MediaTrack> = emptyList()
     // private var audioTracks: List<MediaTrack> = emptyList()
     // private var subtitleTracks: List<MediaTrack> = emptyList()
-    private var externalSubtitleTracks: List<MediaTrack> = emptyList()
-    private var selectedExternalSubtitleId: String? =null
     private val eventsNeedListen=arrayOf(
         MPV_EVENT_START_FILE,
         MPV_EVENT_FILE_LOADED,
@@ -52,7 +51,7 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         MPV_EVENT_SEEK,
         MPV_EVENT_PAUSED_FOR_CACHE_START,
         MPV_EVENT_PAUSED_FOR_CACHE_END,
-        MPV_EVENT_TRACK_LIST_CHANGE,
+        // MPV_EVENT_TRACK_LIST_CHANGE,
     )
 
 
@@ -65,17 +64,15 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
                 MPV_EVENT_START_FILE -> {
                     startingFlag = false
                 }
-                MPV_EVENT_TRACK_LIST_CHANGE -> {
-                    if(selectedExternalSubtitleId!=null){
-                        tracks = MpvCore.getTracks()
-                        setExternalSub(selectedExternalSubtitleId)
-                    }
-                    return@BiConsumer
-                }
+                // MPV_EVENT_TRACK_LIST_CHANGE -> {
+                //     tracks = MpvCore.getTracks()
+                //     // if(selectedExternalSubtitleId!=null){
+                //     //     setExternalSub(selectedExternalSubtitleId)
+                //     // }
+                //     return@BiConsumer
+                // }
                 MPV_EVENT_FILE_LOADED->{
-                    for (subConfig in subConfigs) {
-                        MpvCore.command(arrayOf("async","sub-add",subConfig.uri.toString(),"auto","${subConfig.id}"))
-                    }
+                    tracks = MpvCore.getTracks()
                 }
             }
             invalidateState()
@@ -220,29 +217,7 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     }
 
     override fun handleSetTrackSelectionParameters(trackSelectionParameters: TrackSelectionParameters): ListenableFuture<*> {
-
-        //        player.setTrackSelectionParameters(
-        //            player.getTrackSelectionParameters()
-        //                .buildUpon()
-        //                .setMaxVideoSizeSd()
-        //                .build())
         this.trackSelectionParameters=trackSelectionParameters
-        // 构建新的参数，指定音频轨道
-
-        // 假设 player 是 ExoPlayer 实例（实现了 Player 接口）
-        // val currentParams: TrackSelectionParameters = player.getTrackSelectionParameters()
-        //
-        //
-        // // 构建新的参数，指定音频轨道
-        // val newParams = currentParams.buildUpon()
-        //     .setOverrideForType(
-        //         TrackSelectionOverride(
-        //             MediaTrackGroup(),  /* 选中该 group 中的第几个轨道，比如 1 表示第二个 */
-        //             ImmutableList.of<E?>(1),
-        //         ),
-        //     )
-        //     .build()
-
         return Futures.immediateFuture(null)
     }
 
@@ -257,8 +232,22 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
         val localConfiguration = mediaItem.localConfiguration ?: return Futures.immediateFuture(null)
         val uri = localConfiguration.uri
         subConfigs=localConfiguration.subtitleConfigurations
-        MpvCore.setOptions("start","+${(startPositionMs/1000)}")
-        MpvCore.command(arrayOf("loadfile", uri.toString()))
+
+        val externalSubtitleFiles ="sub-files-set="+ subConfigs.stream().map {
+            it.uri.toString().replace(":", "\\:")
+        }.collect(Collectors.joining(":"))
+
+        // val externalSubtitleFiles= "sub-files-set=https\\://jellyd.1133666.xyz\\:33/Videos/f14b5b6e-4b45-8471-c64a-8c35f10220a3/f14b5b6e4b458471c64a8c35f10220a3/Subtitles/0/0/Stream.ass?ApiKey=5fe67b135cdc493885816b826664e798:https\\://jellyd.1133666.xyz\\:33/Videos/f14b5b6e-4b45-8471-c64a-8c35f10220a3/f14b5b6e4b458471c64a8c35f10220a3/Subtitles/1/0/Stream.ass?ApiKey=5fe67b135cdc493885816b826664e798"
+        // MpvCore.setOptions("start","+${(startPositionMs/1000)}")
+        MpvCore.setOptions("sub-font-provider","fontconfig")
+        MpvCore.command(
+            arrayOf(
+                "loadfile", uri.toString(),
+                "replace",
+                "0",
+                "${externalSubtitleFiles},start=+${(startPositionMs / 1000)}",
+            ),
+        )
         return Futures.immediateFuture(null)
     }
 
@@ -306,25 +295,25 @@ class MpvPlayer (application: Application, looper: Looper) : SimpleBasePlayer(lo
     fun disableSubTrack(){
         MpvCore.setProperty("sid","no")
     }
-    fun setSubTrack(index:Int, subtitleDeliveryMethod: SubtitleDeliveryMethod, subTitleId: String?){
+    fun setSubTrack(index:Int, subtitleDeliveryMethod: SubtitleDeliveryMethod, subTitleFileName: String?){
         if (subtitleDeliveryMethod==SubtitleDeliveryMethod.EMBED){
             if (index in tracks.indices) {
                 MpvCore.setProperty("sid", tracks[index].id)
             }
         }else if(subtitleDeliveryMethod==SubtitleDeliveryMethod.EXTERNAL){
-            selectedExternalSubtitleId=subTitleId
-            setExternalSub(subTitleId)
+            setExternalSub(subTitleFileName)
         }
 
     }
 
-    private fun setExternalSub(selectedExternalSubtitleId:String?){
-        if(selectedExternalSubtitleId==null) return
+    private fun setExternalSub(selectedExternalSubtitleFileName:String?){
         val mediaTrackManager = MpvCore.MediaTrackManager(tracks)
         mediaTrackManager.getTracksByType(MpvCore.TrackType.SUBTITLE).filter {
                 track -> track.external
         }.firstOrNull{ track ->
-            track.title==selectedExternalSubtitleId
+            selectedExternalSubtitleFileName?.let { fileName->
+                track.externalFilename.contains(fileName)
+            }?:false
         }?.also {
             MpvCore.setProperty("sid", it.id)
         }

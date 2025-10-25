@@ -157,7 +157,7 @@ class TrackSelectionHelper(
                     return true
                 }
                 SubtitleDeliveryMethod.EXTERNAL -> {
-                    player.setSubTrack(subtitleStream.index,SubtitleDeliveryMethod.EXTERNAL,"${ExternalSubtitleStream.ID_PREFIX}${subtitleStream.index}")
+                    player.setSubTrack(subtitleStream.index,SubtitleDeliveryMethod.EXTERNAL,subtitleStream.deliveryUrl)
                     return true
                 }
                 else -> return false
